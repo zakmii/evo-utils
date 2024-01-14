@@ -1,0 +1,9 @@
+The gene MSH3 is involved in the DNA mismatch repair pathway, which is crucial for maintaining genetic stability. Mutations in this gene can lead to an increased risk of developing cancer. The CDH1 gene encodes a protein that is essential for cell adhesion and structural integrity. When altered, it can result in conditions that predispose individuals to cancer, such as hereditary diffuse gastric cancer.
+
+MLH1 is another gene that plays a significant role in DNA mismatch repair. Defects in MLH1 are linked to Lynch syndrome, which is associated with a higher risk of various cancers. The RET gene is important for the development of the nervous system and kidneys, and mutations in this gene can lead to syndromes that include thyroid cancer.
+
+The APC gene acts as a tumor suppressor, helping to regulate cell growth. Mutations in APC are commonly seen in familial adenomatous polyposis, a condition that significantly increases the risk of colorectal cancer. SRC is a gene that encodes a protein involved in signaling pathways controlling cell growth, and its abnormal activity is implicated in the progression of different cancers.
+
+SMARCB1 is part of a complex that regulates gene expression and chromatin remodeling. Mutations in SMARCB1 can cause rhabdoid tumors, which are aggressive cancers typically found in children. TGFBR2 is a receptor for transforming growth factor-beta and is involved in cell proliferation and differentiation. Mutations in TGFBR2 can disrupt normal cell signaling, contributing to the development of cancer.
+
+SDHB is a gene that is part of a complex involved in the mitochondrial electron transport chain. Mutations in SDHB can lead to hereditary paraganglioma and pheochromocytoma, which are tumors of the nervous system. Lastly, PMS2, like MLH1, is involved in DNA mismatch repair and is associated with Lynch syndrome, increasing the risk of cancer.
