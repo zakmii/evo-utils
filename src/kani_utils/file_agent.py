@@ -51,7 +51,7 @@ class FileKani(Kani):
                     sample = df.head(10)
                     self.render_in_ui(lambda: st.dataframe(sample))
 
-                    message = f"The user has been shown the first {min(10, len(sample))} rows of the CSV. There are {len(sample)} rows total, and {len(df.columns)} columns named: {', '.join(df.columns)}."
+                    message = f"The user has been shown the first {min(10, len(sample))} rows of the CSV. There are {len(df)} rows total, and {len(df.columns)} columns named: {', '.join(df.columns)}."
 
                     if hasattr(self, "dfs"):
                         self.dfs[table_name] = df

@@ -59,9 +59,13 @@ ks.initialize_app_config(
 class MediaKani(StreamlitKani):
     # Be sure to override the __init__ method to pass any parameters to the superclass
     def __init__(self, *args, **kwargs):
-         greeting = "Hello, I'm a demo assistant. You can ask me the weather, or to play a random video on youtube."
-         description = "An agent that demonstrates the basic capabilities of Streamlit+Kani."
-         super().__init__(greeting = greeting, description = description, *args, **kwargs)
+        super().__init__(*args, **kwargs)
+
+        self.greeting = "Hello, I'm a demo assistant. You can ask me the weather, or to play a random video on youtube."
+        self.description = "An agent that demonstrates the basic capabilities of Streamlit+Kani."
+        self.avatar = "🎬"
+        self.user_avatar = "👤"
+
 
     @ai_function()
     def get_weather(
@@ -95,19 +99,27 @@ class TokenCounterFileKani(StreamlitKani, TokenCounterKani, FileKani):
         # run the constructors of both superclasses
         super().__init__(*args, **kwargs)
 
+        self.description = f"Agent that can read files and track the cost of the conversation."
+        self.greeting = "Hello, I'm an assistant with with the ability to read the contents text and PDF files, and track the cost of our conversation."
+
         self.prompt_tokens_cost = 0.01
         self.completion_tokens_cost = 0.03
-
-        self.description = f"Agent that can read files and track the cost of the conversation."
-        self.avatar = "🧮"
-        self.user_avatar = "👤"
-        self.greeting = "Hello, I'm an assistant with with the ability to read the contents text and PDF files, and track the cost of our conversation."
 
     @ai_function()
     def identify_gene_names(self, gene_names: Annotated[List[str], AIParam(desc="A list of gene names to identify.")]):
         """Identifies gene names of interest from the current conversation, focusing on genes of interest to the user."""
 
         return f"Identified {len(gene_names)} gene names of interest: {', '.join(gene_names)}."
+
+
+class FileDatabaseKani(StreamlitKani, DfKani, FileKani):
+    """A Kani that keeps track of tokens used over the course of the conversation."""
+    def __init__(self, *args, **kwargs):
+        # run the constructors of both superclasses
+        super().__init__(*args, **kwargs)
+
+        self.description = f"Agent that can read files, including reading CSV files and query them with SQL."
+        self.greeting = "Hello, I'm an assistant with the ability to read CSV files and query them with SQL."
 
 
 
@@ -120,6 +132,7 @@ def get_agents():
     return {
             "Demo Agent": MediaKani(engine),
             "Token Counter Demo Agent": TokenCounterFileKani(engine),
+            "File Database Demo Agent": FileDatabaseKani(engine),
            }
 
 
