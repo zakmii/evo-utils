@@ -7,10 +7,7 @@
 
 # kani_streamlit imports
 import kani_utils.kani_streamlit_server as ks
-from kani_utils.streamlit_agent import StreamlitKani
-from kani_utils.token_counter_agent import TokenCounterKani
-from kani_utils.df_agent import DfKani
-from kani_utils.file_agent import FileKani
+from kani_utils.kanis import StreamlitKani, TokenCounterKani, FileKani, DfKani
 
 # for reading API keys from .env file
 import os
