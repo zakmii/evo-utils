@@ -16,46 +16,48 @@ from typing import Annotated
 import pandas as pd
 from pandasql import sqldf
 
-class StreamlitKani(Kani):
+
+
+class EnhancedKani(Kani):
     def __init__(self,
                  *args,
+                 name = "Agent Name",
                  greeting = "Greetings! This greeting is shown to the user before the interaction, to provide instructions or other information. The LLM does not see it.",
-                 description = "A brief description of the agent, shown in the sidebar.",
+                 description = "A brief description of the agent, shown in the user interface.",
                  avatar = "🤖",
                  user_avatar = "👤",
+                 prompt_tokens_cost = None,
+                 completion_tokens_cost = None,
                  **kwargs):
-
+        
         super().__init__(*args, **kwargs)
 
+        self.name = name
         self.greeting = greeting
         self.description = description
         self.avatar = avatar
         self.user_avatar = user_avatar
-
-        self.display_messages = []
-        self.conversation_started = False
-
-    def render_in_ui(self, data):
-        """Render a dataframe in the chat window."""
-        self.display_messages.append(UIOnlyMessage(data))
-
-
-
-class TokenCounterKani(Kani):
-    """A Kani that keeps track of tokens used over the course of the conversation."""
-    def __init__(self, 
-                 *args, 
-                 prompt_tokens_cost = None, 
-                 completion_tokens_cost = None,                  
-                 **kwargs):
-
-        super().__init__(*args, **kwargs)
 
         self.prompt_tokens_cost = prompt_tokens_cost
         self.completion_tokens_cost = completion_tokens_cost
         self.tokens_used_prompt = 0
         self.tokens_used_completion = 0
 
+        self.memory = {}
+
+    @ai_function()
+    def save_to_memory(self,
+                       key: Annotated[str, AIParam(desc="The key to save the value under.")],
+                       value: Annotated[str, AIParam(desc="The value to save.")]):
+        """Save a value to memory."""
+        self.memory[key] = value
+
+    @ai_function()
+    def get_from_memory(self,
+                        key: Annotated[str, AIParam(desc="The key to retrieve the value for.")]):
+        """Retrieve a value from memory."""
+        return self.memory.get(key, None)
+            
     def get_convo_cost(self):
         """Get the total cost of the conversation so far."""
         if self.prompt_tokens_cost is None or self.completion_tokens_cost is None:
@@ -81,35 +83,79 @@ class TokenCounterKani(Kani):
             )
         return completion
     
-
     async def estimate_next_tokens_cost(self):
         """Estimate the cost of the next message (not including the response)."""
         # includes all previous messages, plus the current
         return sum(self.message_token_len(m) for m in await self.get_prompt()) + self.engine.token_reserve + self.engine.function_token_reserve(list(self.functions.values()))
 
 
+class StreamlitKani(EnhancedKani):
+    def __init__(self,
+                 *args,
+                 **kwargs):
 
-class FileKani(Kani):
+        super().__init__(*args, **kwargs)
+
+        self.display_messages = []
+
+    def render_in_streamlit_chat(self, data):
+        """Render a dataframe in the chat window."""
+        self.display_messages.append(UIOnlyMessage(data))
+
+    def render_streamlit_ui(self):
+        st.markdown(f"""
+                     ## {self.name}
+                     {self.description}
+                     """)
+
+        cost = self.get_convo_cost()
+        if cost is not None:
+            st.markdown(f"""
+                        ### Conversation Cost: {cost:.2f}
+                        Prompt tokens: {self.tokens_used_prompt}, Completion tokens: {self.tokens_used_completion}
+                        """)
+
+
+class StreamlitFileKani(StreamlitKani):
     """A Kani that can access the contents of uploaded files."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.files = []
 
+    def render_streamlit_ui(self):
+        StreamlitKani.render_streamlit_ui(self)
+        st.markdown("### Files")
+        st.caption("This model can read the files listed below. When referenced in conversation, text-like file contents (txt, pdf, json) will be supplied in full to the model. CSV files will be read as data frames and summarized.")
+        uploaded_files = st.file_uploader("Upload a document", 
+                                          type= None, 
+                                          accept_multiple_files = True,
+                                          )
+        
+        # replace the agents files with the returned list (which will contain
+        # the current file set shown in the UI)
+        self.files = uploaded_files
 
     @ai_function()
     def get_file_contents(self, file_name: Annotated[str, AIParam(desc="The name of the file to read.")]):
         """Return the contents of the given filename as a string. If the file is not found, or is not a PDF or text-based, return None."""
 
+        contents = None
         for file in self.files:
             if file.name == file_name:
                 if file.type.startswith("text"):
-                    return file.read()
+                    contents = file.read()
                 elif file.type == "application/pdf":
                     with pdfplumber.open(file) as pdf:
-                        return "\n\n".join([page.extract_text() for page in pdf.pages])
+                        contents = "\n\n".join([page.extract_text() for page in pdf.pages])
                 elif file.type == "application/json":
-                    return file.read()
+                    contents = file.read()
+
+        if contents is None:
+            return f"Error: file name not found in current uploaded file set."
+        
+        message = f"Here are the contents of the file, which have also been saved in memory key '{file_name}' for further use:\n\n"
+        return message + contents
 
 
     @ai_function()
@@ -125,20 +171,19 @@ class FileKani(Kani):
         """Read a CSV file uploaded by the user."""
         for file in self.files:
             if file.name == file_name:
+
                 # assume the file is a csv, use pandas to read it
                 if file.type == "text/csv":
                     df = pd.read_csv(file)
+
                     # create an SQL-compatible table name based on the filename, keeping only alphanumeric characters, dots to underscores, and uppercasing
                     table_name = re.sub(r"[^a-zA-Z0-9_]", "_", file_name).upper()
 
                     sample = df.head(10)
-                    self.render_in_ui(lambda: st.dataframe(sample))
 
-                    message = f"The user has been shown the first {min(10, len(sample))} rows of the CSV. There are {len(df)} rows total, and {len(df.columns)} columns named: {', '.join(df.columns)}."
-
-                    if hasattr(self, "dfs"):
-                        self.dfs[table_name] = df
-                        message = f"Created table {table_name} from the CSV. {message}"
+                    message = f"Here is a sample of the data: {sample.to_markdown()}.\n\nThere are {len(df)} rows total, and {len(df.columns)} columns named: {', '.join(df.columns)}."
+                    self.memory[table_name] = df
+                    message += f"\n\nThe data has been saved in memory key '{table_name}' for further use."
 
                     return message
 
@@ -148,42 +193,42 @@ class FileKani(Kani):
         return f"Error: file name not found in current uploaded file set."
 
 
-
-class DfKani(Kani):
-    """A Kani that can run SQL queries on an in-memory database, stored as a dictionary of pandas dataframes."""
+class StreamlitFileTableKani(StreamlitFileKani):
+    """A Kani that can run SQL queries on pandas dataframes stored in memory."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.dfs = {}
+
+    def render_streamlit_ui(self):
+        StreamlitFileKani.render_streamlit_ui(self)
+        table_names = self.list_tables()
+        if len(table_names) == 0:
+            table_names = ["*None*"]
+        sep = "\n- "
+        st.markdown("### Current Tables")
+        st.caption("This model can querying the following in-memory tables. Tables may be created by uploading a CSV file or other operations.")
+        st.markdown("- " + sep.join(table_names))
+
 
     @ai_function()
     def list_tables(self):
-        """List the tables in your in-memory database."""
-        return list(self.dfs.keys())
-    
-    # @ai_function()
-    # def create_table_from_pandas(self,
-    #                              df: Annotated[pd.DataFrame, AIParam(desc="The dataframe to create the table from.")],
-    #                              table_name: Annotated[str, AIParam(desc="The name of the table to create.")]):
-    #     """Create a table in your in-memory database from a pandas dataframe."""
-    #     self.dfs[table_name] = df
-    #     return f"Created table {table_name}."
-    
-
-    def create_table_from_json(self,
-                               json_str: str,
-                               table_name: str):
-        """Create a table in your in-memory database from a JSON string. Uses pandas.read_json."""
-        df = pd.read_json(json_str)
-        return self.create_table_from_pandas(df, table_name)
-
+        """List pandas dataframes stored in memory, which can be queried and joined with SQL."""
+        pandas_tables = [k for k, v in self.memory.items() if isinstance(v, pd.DataFrame)]
+        return pandas_tables
+   
     @ai_function()
     def run_query(self,
-                 query: Annotated[str, AIParam(desc="The query to run.")]):
-        """Query your in-memory database using SQL."""
+                 query: Annotated[str, AIParam(desc="The query to run.")],
+                 save_result_to_memory_key: Annotated[str, AIParam(desc="Optional: the key to save the result to. If not provided, the result will not be saved.")] = None
+                 ):
+        """Query the pandas dataframes store in memory as an SQL database. Use memory key names as table names. Results are returned as text."""
         try:
-            result = sqldf(query, self.dfs)
-            #self.render_in_ui(lambda: st.dataframe(result))
+            memory_dfs = {k: v for k, v in self.memory.items() if isinstance(v, pd.DataFrame)}
+            result = sqldf(query, memory_dfs)
+
+            if save_result_to_memory_key is not None:
+                self.memory[save_result_to_memory_key] = result
+
             return result.to_string(index=False)
         except Exception as e:
             return f"Error: {e}"

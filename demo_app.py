@@ -7,7 +7,7 @@
 
 # kani_streamlit imports
 import kani_utils.kani_streamlit_server as ks
-from kani_utils.kanis import StreamlitKani, TokenCounterKani, FileKani, DfKani
+from kani_utils.kanis import StreamlitKani, StreamlitFileKani, StreamlitFileTableKani
 
 # for reading API keys from .env file
 import os
@@ -36,6 +36,7 @@ dotenv.load_dotenv()
 # see more at https://docs.streamlit.io/library/api-reference/utilities/st.set_page_config
 # this function MUST be run first
 ks.initialize_app_config(
+    show_function_calls = True,
     page_title = "StreamlitKani Demo",
     page_icon = "🦀", # can also be a URL
     initial_sidebar_state = "expanded", # or "expanded"
@@ -63,7 +64,6 @@ class MediaKani(StreamlitKani):
         self.avatar = "🎬"
         self.user_avatar = "👤"
 
-
     @ai_function()
     def get_weather(
         self,
@@ -80,7 +80,6 @@ class MediaKani(StreamlitKani):
         mean_temp = weather_df.temp.mean()
         return f"Weather in {location}: Sunny, {mean_temp} degrees fahrenheit."
 
-
     @ai_function()
     def entertain_user(self):
         """Entertain the user by showing a video."""
@@ -88,35 +87,6 @@ class MediaKani(StreamlitKani):
         self.render_in_ui(lambda: st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
 
         return "The video has just been shown to the user, but they have not begun playing it yet. Tell the user you hope it doesn't 'let them down'."
-
-
-class TokenCounterFileKani(StreamlitKani, TokenCounterKani, FileKani):
-    """A Kani that keeps track of tokens used over the course of the conversation."""
-    def __init__(self, *args, **kwargs):
-        # run the constructors of both superclasses
-        super().__init__(*args, **kwargs)
-
-        self.description = f"Agent that can read files and track the cost of the conversation."
-        self.greeting = "Hello, I'm an assistant with with the ability to read the contents text and PDF files, and track the cost of our conversation."
-
-        self.prompt_tokens_cost = 0.01
-        self.completion_tokens_cost = 0.03
-
-    @ai_function()
-    def identify_gene_names(self, gene_names: Annotated[List[str], AIParam(desc="A list of gene names to identify.")]):
-        """Identifies gene names of interest from the current conversation, focusing on genes of interest to the user."""
-
-        return f"Identified {len(gene_names)} gene names of interest: {', '.join(gene_names)}."
-
-
-class FileDatabaseKani(StreamlitKani, DfKani, FileKani):
-    """A Kani that keeps track of tokens used over the course of the conversation."""
-    def __init__(self, *args, **kwargs):
-        # run the constructors of both superclasses
-        super().__init__(*args, **kwargs)
-
-        self.description = f"Agent that can read files, including reading CSV files and query them with SQL."
-        self.greeting = "Hello, I'm an assistant with the ability to read CSV files and query them with SQL."
 
 
 
@@ -127,9 +97,11 @@ engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4-1106-preview")
 # Agents are keyed by their name, which is what the user will see in the UI
 def get_agents():
     return {
-            "Demo Agent": MediaKani(engine),
-            "Token Counter Demo Agent": TokenCounterFileKani(engine),
-            "File Database Demo Agent": FileDatabaseKani(engine),
+            "Basic Agent": StreamlitKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
+            "Basic Agent, No Costs": StreamlitKani(engine),
+            "File Agent": StreamlitFileKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
+            "Table Agent": StreamlitFileTableKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
+            "Media Agent": MediaKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
            }
 
 

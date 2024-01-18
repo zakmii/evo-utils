@@ -24,7 +24,13 @@ class UIOnlyMessage:
 
 
 def initialize_app_config(**kwargs):
-    _initialize_session_state()
+    _initialize_session_state(**kwargs)
+
+    # this is kind of a hack, we want the user to be able to configure the default setting for 
+    # this which needs to be set in the session state, so we pass in kwargs above, but it can't 
+    # go to set_page_config below, so we remove it here
+    del kwargs["show_function_calls"]
+
     defaults = {
         "page_title": "Kani AI",
         "page_icon": None,
@@ -62,7 +68,7 @@ def serve_app():
 
 
 # Initialize session states
-def _initialize_session_state():
+def _initialize_session_state(**kwargs):
     if "logger" not in st.session_state:
         st.session_state.logger = logging.getLogger(__name__)
         st.session_state.logger.handlers = []
@@ -71,9 +77,15 @@ def _initialize_session_state():
 
     st.session_state.setdefault("event_loop", asyncio.new_event_loop())
     st.session_state.setdefault("default_api_key", None)  # Store the original API key
-    st.session_state.setdefault("show_function_calls", False)
     st.session_state.setdefault("ui_disabled", False)
     st.session_state.setdefault("lock_widgets", False)
+
+    if "show_function_calls" in kwargs:
+        st.session_state.setdefault("show_function_calls", kwargs["show_function_calls"])
+    else:
+        st.session_state.setdefault("show_function_calls", False)
+
+
 
 
 
@@ -246,7 +258,12 @@ async def _main():
                                           key="current_agent_name", 
                                           disabled=st.session_state.lock_widgets, 
                                           label_visibility="visible")
-        st.caption(st.session_state.agents[current_agent_name].description)
+
+
+        # if current_agent has a get_convo_cost method:
+        if hasattr(current_agent, "render_streamlit_ui"):
+           current_agent.render_streamlit_ui()
+
         st.markdown("#")
         st.markdown("#")
         st.markdown("#")
@@ -262,35 +279,8 @@ async def _main():
         
         st.markdown("---")
 
-        # if current_agent has a files attribute:
-        if hasattr(current_agent, "files"):
-            # show the file chooser
-            uploaded_files = st.file_uploader("Upload a document", 
-                                              type= None, 
-                                              accept_multiple_files = True,
-                                              )
-            
-            # replace the agents files with the returned list (which will contain
-            # the current file set shown in the UI)
-            current_agent.files = uploaded_files
 
-            st.markdown("---")
-
-        # if current_agent has a get_convo_cost method:
-        if hasattr(current_agent, "get_convo_cost"):
-            # show the cost of the current conversation
-            cost = current_agent.get_convo_cost()
-            st.caption(f"Chat prompt tokens: {current_agent.tokens_used_prompt}, completion tokens: {current_agent.tokens_used_completion}, cost: ${cost:.2f}")
-
-            st.markdown("---")
-
-        # if current agent has a dfs attribute:
-        if hasattr(current_agent, "dfs"):
-            # show the list of tables
-            st.caption(f"Tables: {', '.join(current_agent.dfs.keys())}")
-
-            st.markdown("---")
-
+        
 
 
     st.header(st.session_state.current_agent_name)
