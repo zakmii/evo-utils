@@ -65,6 +65,7 @@ class EnhancedKani(Kani):
         
         return (self.tokens_used_prompt / 1000.0) * self.prompt_tokens_cost + (self.tokens_used_completion / 1000.0) * self.completion_tokens_cost
 
+
     async def get_model_completion(self, include_functions: bool = True, **kwargs) -> BaseCompletion:
         """Overrides the default get_model_completion to track tokens used.
         See https://github.com/zhudotexe/kanpai/blob/cc603705d353e4e9b9aa3cf9fbb12e3a46652c55/kanpai/base_kani.py#L48
@@ -98,9 +99,9 @@ class StreamlitKani(EnhancedKani):
 
         self.display_messages = []
 
-    def render_in_streamlit_chat(self, data):
-        """Render a dataframe in the chat window."""
-        self.display_messages.append(UIOnlyMessage(data))
+    def render_in_streamlit_chat(self, func):
+        """Renders UI components in the chat. Takes a function that takes no parameters that should render the elements."""
+        self.display_messages.append(UIOnlyMessage(func))
 
     def render_streamlit_ui(self):
         st.markdown(f"""
