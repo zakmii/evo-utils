@@ -17,7 +17,6 @@ import pandas as pd
 from pandasql import sqldf
 
 
-
 class EnhancedKani(Kani):
     def __init__(self,
                  *args,
