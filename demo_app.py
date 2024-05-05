@@ -72,10 +72,10 @@ class MediaKani(StreamlitKani):
         """Get the current weather in a given location."""
 
         # You can use the Streamlit API to render things in the UI in the chat
-        # Do so by passing a function to the render_in_ui method; it should take no paramters
+        # Do so by passing a function to the render_in_streamlit_chat method; it should take no paramters
         # (but you can refer to data in the outer scope, for example to use st.write() to display a pandas dataframe)
         weather_df = pd.DataFrame({"date": ["2021-01-01", "2021-01-02", "2021-01-03"], "temp": [72, 73, 74]})
-        self.render_in_ui(lambda: st.write(weather_df))
+        self.render_in_streamlit_chat(lambda: st.write(weather_df))
 
         mean_temp = weather_df.temp.mean()
         return f"Weather in {location}: Sunny, {mean_temp} degrees fahrenheit."
@@ -84,7 +84,7 @@ class MediaKani(StreamlitKani):
     def entertain_user(self):
         """Entertain the user by showing a video."""
 
-        self.render_in_ui(lambda: st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        self.render_in_streamlit_chat(lambda: st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
 
         return "The video has just been shown to the user, but they have not begun playing it yet. Tell the user you hope it doesn't 'let them down'."
 
