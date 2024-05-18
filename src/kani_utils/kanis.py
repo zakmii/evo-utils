@@ -17,7 +17,6 @@ import pandas as pd
 from pandasql import sqldf
 
 
-
 class EnhancedKani(Kani):
     def __init__(self,
                  *args,
@@ -43,20 +42,6 @@ class EnhancedKani(Kani):
         self.tokens_used_prompt = 0
         self.tokens_used_completion = 0
 
-        self.memory = {}
-
-    @ai_function()
-    def save_to_memory(self,
-                       key: Annotated[str, AIParam(desc="The key to save the value under.")],
-                       value: Annotated[str, AIParam(desc="The value to save.")]):
-        """Save a value to memory."""
-        self.memory[key] = value
-
-    @ai_function()
-    def get_from_memory(self,
-                        key: Annotated[str, AIParam(desc="The key to retrieve the value for.")]):
-        """Retrieve a value from memory."""
-        return self.memory.get(key, None)
             
     def get_convo_cost(self):
         """Get the total cost of the conversation so far."""
@@ -116,8 +101,44 @@ class StreamlitKani(EnhancedKani):
                         Prompt tokens: {self.tokens_used_prompt}, Completion tokens: {self.tokens_used_completion}
                         """)
 
+# let's pull the memory functionality out into a separate class
+class StreamlitMemoryKani(StreamlitKani):
+    """A Kani that can store and retrieve values from memory."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-class StreamlitFileKani(StreamlitKani):
+        self.memory = {}
+
+    def render_streamlit_ui(self):
+        StreamlitKani.render_streamlit_ui(self)
+        st.markdown("### Memory")
+        st.caption("This model can store and retrieve values in memory. Memory is cleared when the model is reloaded.")
+        memory_keys = self.list_memory_keys()
+        if len(memory_keys) == 0:
+            memory_keys = ["*None*"]
+        sep = "\n- "
+        st.markdown("- " + sep.join(memory_keys))
+
+    @ai_function()
+    def save_to_memory(self,
+                       key: Annotated[str, AIParam(desc="The key to save the value under.")],
+                       value: Annotated[str, AIParam(desc="The value to save.")]):
+        """Save a value to memory."""
+        self.memory[key] = value
+
+    @ai_function()
+    def get_from_memory(self,
+                        key: Annotated[str, AIParam(desc="The key to retrieve the value for.")]):
+        """Retrieve a value from memory."""
+        return self.memory.get(key, None)
+
+    @ai_function()
+    def list_memory_keys(self):
+        """List the keys currently stored in memory."""
+        return list(self.memory.keys())
+
+
+class StreamlitFileKani(StreamlitMemoryKani):
     """A Kani that can access the contents of uploaded files."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -155,6 +176,8 @@ class StreamlitFileKani(StreamlitKani):
         if contents is None:
             return f"Error: file name not found in current uploaded file set."
         
+        # save the contents in memory for later use
+        self.memory[file_name] = contents
         message = f"Here are the contents of the file, which have also been saved in memory key '{file_name}' for further use:\n\n"
         return message + contents
 

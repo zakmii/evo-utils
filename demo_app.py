@@ -89,9 +89,8 @@ class MediaKani(StreamlitKani):
         return "The video has just been shown to the user, but they have not begun playing it yet. Tell the user you hope it doesn't 'let them down'."
 
 
-
 # define an engine to use (see Kani documentation for more info)
-engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4-1106-preview")
+engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4-turbo-2024-04-09")
 
 # We also have to define a function that returns a dictionary of agents to serve
 # Agents are keyed by their name, which is what the user will see in the UI
