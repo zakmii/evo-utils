@@ -89,33 +89,6 @@ class MediaKani(StreamlitKani):
         return "The video has just been shown to the user, but they have not begun playing it yet. Tell the user you hope it doesn't 'let them down'."
 
 
-class RedlineKani(StreamlitKani):
-    """A Kani that can use the redline library to compute diffs between text inputs."""
-
-    def __init__(self, *args, **kwargs):
-        kwargs['system_prompt'] = 'You are a professional editor. You may be asked to review or improve text. Provide the user feedback, and make suggested edits, displaying them to the user.'
-
-        super().__init__(*args, **kwargs)
-
-        self.greeting = "Hello, I'm an editing assistant. You can ask me to review or improve text."
-        self.description = "A professional editor."
-        self.avatar = "🖍️"
-        self.user_avatar = "👤"
-
-
-    @ai_function()
-    def display_diff(self,
-                     text1: Annotated[str, AIParam(desc="Original text.")],
-                     text2: Annotated[str, AIParam(desc="Edited text.")]):
-        """Display changes between two versions of text."""
-        from redlines import Redlines
-        
-        result = Redlines(text1, text2).output_markdown
-        self.render_in_streamlit_chat(lambda: st.markdown(result, unsafe_allow_html=True))
-
-        return "<!-- the result has been displayed in the chat -->"
-
-
 # define an engine to use (see Kani documentation for more info)
 engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4-turbo-2024-04-09")
 
@@ -123,7 +96,6 @@ engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4-turbo-2024-04-0
 # Agents are keyed by their name, which is what the user will see in the UI
 def get_agents():
     return {
-            "Editor Agent": RedlineKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
             "Basic Agent": StreamlitKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
             "Basic Agent, No Costs": StreamlitKani(engine),
             "File Agent": StreamlitFileKani(engine, prompt_tokens_cost = 0.01, completion_tokens_cost = 0.03),
