@@ -88,6 +88,17 @@ def _initialize_session_state(**kwargs):
 
 
 
+def _render_stream(stream):
+    print(stream)
+    current_agent = st.session_state.agents[st.session_state.current_agent_name]
+
+    if stream.role == ChatRole.ASSISTANT:
+        with st.chat_message("assistant", avatar = current_agent.avatar):
+            #async for token in stream:
+            with st.spinner(st.session_state.current_action):
+                st.write_stream(_sync_generator_from_kani_streammanager(stream))
+
+    return st.session_state.current_action
 
 
 # Render chat message
@@ -97,6 +108,7 @@ def _render_message(message):
     current_user_avatar = current_agent.user_avatar
 
     current_action = "*Thinking...*"
+
 
     # first, check if this is a UIOnlyMessage,
     # if so, render it and return
@@ -109,8 +121,8 @@ def _render_message(message):
         with st.chat_message(role, avatar=message.icon):
             message.func()
         return current_action
-
-    if message.role == ChatRole.USER:
+    
+    elif message.role == ChatRole.USER:
         with st.chat_message("user", avatar = current_user_avatar):
             st.write(message.content)
 
@@ -254,23 +266,14 @@ async def _handle_chat_input():
         st.session_state.current_action = "*Thinking...*"
 
         async for stream in agent.full_round_stream(prompt):
-            if stream.role == ChatRole.ASSISTANT:
-                with st.chat_message("assistant", avatar = agent.avatar):
-                    #async for token in stream:
-                    with st.spinner(st.session_state.current_action):
-                        st.write_stream(_sync_generator_from_kani_streammanager(stream))
+            st.session_state.current_action = _render_stream(stream)
+            message = await stream.message()
+            agent.display_messages.append(message)
+            st.session_state.current_action = _render_message(message)
 
-            try:
-                message = await stream.message()
-                agent.display_messages.append(message)
-                st.session_state.current_action = _render_message(message)
-
-                session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
-                info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
-                st.session_state.logger.info(info)
-
-            except StopAsyncIteration:
-                break
+            session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+            info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
+            st.session_state.logger.info(info)
 
         st.session_state.lock_widgets = False  # Step 5: Unlock the UI
         st.rerun()
