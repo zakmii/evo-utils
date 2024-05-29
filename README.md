@@ -4,6 +4,7 @@ Utilities for the Kani LLM framework.
 
 # Changelog
 
+1.1: Added streaming output
 1.0: Moved memory functionality out of base class
 
 # Acknowledgements

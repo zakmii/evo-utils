@@ -1,11 +1,12 @@
 import streamlit as st
 import logging
 from kani import ChatRole, ChatMessage
+from kani.streaming import StreamManager
 import asyncio
-import tempfile
 import json
-import os
-import shutil
+import asyncio
+import nest_asyncio
+from typing import Generator
 
 class UIOnlyMessage:
     """
@@ -117,7 +118,7 @@ def _render_message(message):
         with st.chat_message("assistant", avatar="ℹ️"):
             st.write(message.content)
 
-    elif message.role == ChatRole.ASSISTANT and message.tool_calls == None:
+    elif message.role == ChatRole.ASSISTANT and (message.tool_calls == None or message.tool_calls == []):
         with st.chat_message("assistant", avatar=current_agent_avatar):
             st.write(message.content)
 
@@ -208,32 +209,67 @@ def _render_message(message):
 
 #     st.rerun()
 
+
+def _sync_generator_from_kani_streammanager(kani_stream: StreamManager) -> Generator:
+    """
+    Converts an asynchronous Kani StreamManager to a synchronous generator.
+    """
+
+    nest_asyncio.apply()
+
+    loop = asyncio.get_event_loop()
+    queue = asyncio.Queue()
+
+    async def put_items_in_queue():
+        async for item in kani_stream:
+            await queue.put(item)
+        await queue.put(None)  # Sentinel to signal the end of the queue
+
+    async def runner():
+        await put_items_in_queue()
+
+    def generator():
+        asyncio.ensure_future(runner())
+
+        while True:
+            item = loop.run_until_complete(queue.get())
+            if item is None:  # Check for the sentinel value
+                break
+            yield item
+
+    return generator()
+
+
 # Handle chat input and responses
 async def _handle_chat_input():
     if prompt := st.chat_input(disabled=st.session_state.lock_widgets, on_submit=_lock_ui):
-
+        # get current agent
         agent = st.session_state.agents[st.session_state.current_agent_name]
 
+        # add user message to display and agent's history
         user_message = ChatMessage.user(prompt)
         _render_message(user_message)
         agent.display_messages.append(user_message)
 
-        messages = agent.full_round(prompt)
-
-        agent.conversation_started = True
-
+        # set the current action (note: with the new streaming functionality the current_action
+        # is not shown in the UI, but we keep it here in case of future need)
         st.session_state.current_action = "*Thinking...*"
 
-        while True:
+
+        async for stream in agent.full_round_stream(prompt):
+            with st.chat_message("assistant", avatar = agent.avatar):
+                #async for token in stream:
+                st.write_stream(_sync_generator_from_kani_streammanager(stream))
+
             try:
-                with st.spinner(st.session_state.current_action):
-                    message = await anext(messages)
-                    agent.display_messages.append(message)
-                    st.session_state.current_action = _render_message(message)
-       
-                    session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
-                    info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
-                    st.session_state.logger.info(info)
+                message = await stream.message()
+                agent.display_messages.append(message)
+                st.session_state.current_action = _render_message(message)
+
+                session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+                info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
+                st.session_state.logger.info(info)
+
             except StopAsyncIteration:
                 break
 

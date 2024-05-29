@@ -90,7 +90,7 @@ class MediaKani(StreamlitKani):
 
 
 # define an engine to use (see Kani documentation for more info)
-engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4-turbo-2024-04-09")
+engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4o")
 
 # We also have to define a function that returns a dictionary of agents to serve
 # Agents are keyed by their name, which is what the user will see in the UI
