@@ -251,15 +251,13 @@ async def _handle_chat_input():
         _render_message(user_message)
         agent.display_messages.append(user_message)
 
-        # set the current action (note: with the new streaming functionality the current_action
-        # is not shown in the UI, but we keep it here in case of future need)
         st.session_state.current_action = "*Thinking...*"
-
 
         async for stream in agent.full_round_stream(prompt):
             with st.chat_message("assistant", avatar = agent.avatar):
                 #async for token in stream:
-                st.write_stream(_sync_generator_from_kani_streammanager(stream))
+                with st.spinner(st.session_state.current_action):
+                    st.write_stream(_sync_generator_from_kani_streammanager(stream))
 
             try:
                 message = await stream.message()
