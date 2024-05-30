@@ -18,10 +18,11 @@ class UIOnlyMessage:
         icon (str, optional): The icon of the message. Defaults to "📊".
     """
 
-    def __init__(self, func, role=ChatRole.ASSISTANT, icon="📊"):
+    def __init__(self, func, role=ChatRole.ASSISTANT, icon="📊", type = "ui_element"):
         self.func = func
         self.role = role
         self.icon = icon
+        self.type = type
 
 
 def initialize_app_config(**kwargs):
@@ -106,8 +107,14 @@ def _render_message(message):
         else:
             role = "assistant"
 
-        with st.chat_message(role, avatar=message.icon):
-            message.func()
+        if message.type == "ui_element":
+            with st.chat_message(role, avatar=message.icon):
+                message.func()
+
+        elif message.type == "tool_use" and st.session_state.show_function_calls:
+            with st.chat_message(role, avatar=message.icon):
+                message.func()
+
         return current_action
     
     elif message.role == ChatRole.USER:
@@ -122,26 +129,41 @@ def _render_message(message):
         with st.chat_message("assistant", avatar=current_agent_avatar):
             st.write(message.content)
 
-    if st.session_state.show_function_calls:
-        if message.tool_calls:
-            for tool_call in message.tool_calls:
-                func_name = tool_call.function.name
-                func_arguments = tool_call.function.arguments
-                current_action = f"*Checking source ({func_name})...*"
-                with st.chat_message("assistant", avatar="🛠️"):
-                    st.text(f"{func_name}(params = {func_arguments})")
+    # if st.session_state.show_function_calls:
+    #     if message.tool_calls:
+    #         for tool_call in message.tool_calls:
+    #             func_name = tool_call.function.name
+    #             func_arguments = tool_call.function.arguments
+    #             current_action = f"*Checking source ({func_name})...*"
+    #             with st.chat_message("assistant", avatar="🛠️"):
+    #                 st.text(f"{func_name}(params = {func_arguments})")
 
-        elif message.role == ChatRole.FUNCTION:
-            current_action = f"*Evaluating result ({message.name})...*"
-            with st.chat_message("assistant", avatar="✔️"):
-                # if message can be converted to json, use st.json, otherwise use text
-                try:
-                    st.json(json.loads(message.content))
-                except:
-                    st.text(message.content)
+    #     elif message.role == ChatRole.FUNCTION:
+    #         current_action = f"*Evaluating result ({message.name})...*"
+    #         with st.chat_message("assistant", avatar="✔️"):
+    #             # if message can be converted to json, use st.json, otherwise use text
+    #             try:
+    #                 st.json(json.loads(message.content))
+    #             except:
+    #                 st.text(message.content)
 
     
     return current_action
+
+def get_message_action_description(message):
+    desc = "Thinking..."
+    if message is None:
+        return desc
+
+    if message.tool_calls:
+        # use the most recent tool call
+        all_tool_calls = [tool_call.function.name for tool_call in message.tool_calls]
+        desc = f"*Checking sources: {', '.join(all_tool_calls)}*"
+
+    elif message.role == ChatRole.FUNCTION:
+        desc = f"*Evaluating...*"
+
+    return desc
 
 # ## kani agents have a save method:
 #     # def save(self, fp: PathLike, **kwargs):
@@ -254,26 +276,40 @@ async def _handle_chat_input():
         st.session_state.current_action = "*Thinking...*"
 
         messages = []
+        message = None
 
         with st.chat_message("assistant", avatar = agent.avatar):
             async for stream in agent.full_round_stream(prompt):
-                if stream.role == ChatRole.ASSISTANT:
-                    st.write_stream(_sync_generator_from_kani_streammanager(stream))
+                # if this is not a function result, stream data to the UI
+                with st.spinner(get_message_action_description(message)):
+                    if stream.role == ChatRole.ASSISTANT:
+                        st.write_stream(_sync_generator_from_kani_streammanager(stream))
 
+                # when the message is done, add it to the list
                 message = await stream.message()
                 messages.append(message)
 
+                # logging
                 session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
                 info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
                 st.session_state.logger.info(info)
 
+
         # add the last message to the display
         agent.display_messages.append(messages[-1])
-        # then add all the others
-        agent.display_messages.extend(messages[:-1])
-        # finally, tell the agent to render all the delayed messages it has stored
+        # then any delayed UI-based messages
         agent.render_delayed_messages()
+        
+        # put together a UI element for the collected calls, and add it to the display list labeled as a tool use
+        def render_messages():
+            with st.expander("Full context"):
+                all_json = [message.model_dump() for message in messages]
+                st.write(all_json)
 
+        render_context = UIOnlyMessage(render_messages, role=ChatRole.SYSTEM, icon="🛠️", type="tool_use")
+        agent.display_messages.append(render_context)
+
+        # unlock and rerun to clean rerender
         st.session_state.lock_widgets = False  # Step 5: Unlock the UI
         st.rerun()
 
@@ -310,7 +346,7 @@ async def _main():
                   on_click=_clear_chat_all_agents, 
                   disabled=st.session_state.lock_widgets)
         
-        st.checkbox("🛠️ Show calls to external tools", 
+        st.checkbox("🛠️ Show full context options", 
                     key="show_function_calls", 
                     disabled=st.session_state.lock_widgets)
         
