@@ -173,6 +173,11 @@ async def _handle_chat_input():
         _render_message(user_message)
         agent.display_messages.append(user_message)
 
+        session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+        info = {"session_id": session_id, "message": user_message.model_dump(), "agent": st.session_state.current_agent_name}
+        st.session_state.logger.info(info)
+
+
         st.session_state.current_action = "*Thinking...*"
 
         messages = []
@@ -198,7 +203,6 @@ async def _handle_chat_input():
                 messages.append(message)
 
                 # logging
-                session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
                 info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
                 st.session_state.logger.info(info)
 
