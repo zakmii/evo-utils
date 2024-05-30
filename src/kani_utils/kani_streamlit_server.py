@@ -119,103 +119,17 @@ def _render_message(message):
     
     elif message.role == ChatRole.USER:
         with st.chat_message("user", avatar = current_user_avatar):
-            st.write(message.content)
+            st.write(message.text)
 
     elif message.role == ChatRole.SYSTEM:
         with st.chat_message("assistant", avatar="ℹ️"):
-            st.write(message.content)
+            st.write(message.text)
 
     elif message.role == ChatRole.ASSISTANT and (message.tool_calls == None or message.tool_calls == []):
         with st.chat_message("assistant", avatar=current_agent_avatar):
-            st.write(message.content)
-
-    # if st.session_state.show_function_calls:
-    #     if message.tool_calls:
-    #         for tool_call in message.tool_calls:
-    #             func_name = tool_call.function.name
-    #             func_arguments = tool_call.function.arguments
-    #             current_action = f"*Checking source ({func_name})...*"
-    #             with st.chat_message("assistant", avatar="🛠️"):
-    #                 st.text(f"{func_name}(params = {func_arguments})")
-
-    #     elif message.role == ChatRole.FUNCTION:
-    #         current_action = f"*Evaluating result ({message.name})...*"
-    #         with st.chat_message("assistant", avatar="✔️"):
-    #             # if message can be converted to json, use st.json, otherwise use text
-    #             try:
-    #                 st.json(json.loads(message.content))
-    #             except:
-    #                 st.text(message.content)
-
+            st.write(message.text)
     
     return current_action
-
-
-# ## kani agents have a save method:
-#     # def save(self, fp: PathLike, **kwargs):
-#     #     """Save the chat state of this kani to a JSON file. This will overwrite the file if it exists!
-
-#     #     :param fp: The path to the file to save.
-#     #     :param kwargs: Additional arguments to pass to Pydantic's ``model_dump_json``.
-#     #     """
-# ## so we will return create a JSON file for each agent,
-# ## and loop over all of those, reading them is as JSON so we 
-# ## can eventually return them to the user as a .json file
-# ## we will return a json object keyed by agent name, 
-# ## but only for those that have conversation_started set to True
-# ## finally, we'll create our temp files in an appropirate temp directory,
-# ## removing them when done for security
-# ## 
-# def _export_chats():
-#     # create a temp dir
-#     temp_dir = tempfile.mkdtemp()
-#     # create a temp file for each agent
-#     for agent_name, agent in st.session_state.agents.items():
-#         if agent.conversation_started:
-#             agent_file = os.path.join(temp_dir, agent_name + ".json")
-#             agent.save(agent_file)
-
-#     # read each agent file as json
-#     agent_jsons = {}
-#     for agent_name, agent in st.session_state.agents.items():
-#         if agent.conversation_started:
-#             agent_file = os.path.join(temp_dir, agent_name + ".json")
-#             with open(agent_file) as f:
-#                 agent_jsons[agent_name] = json.load(f)
-
-#     # remove the temp dir
-#     shutil.rmtree(temp_dir)
-
-#     return json.dumps(agent_jsons)
-
-# ## this is the inverse of the above, using kani's 
-# ## correponding load():
-#     # def load(self, fp: PathLike, **kwargs):
-#     #     """Load chat state from a JSON file into this kani. This will overwrite any existing chat state!
-
-#     #     :param fp: The path to the file containing the chat state.
-#     #     :param kwargs: Additional arguments to pass to Pydantic's ``model_validate_json``.
-#     #     """
-# def _import_chats(parsed_json):
-#     # reset all agents
-#     _clear_chat_all_agents()
-#     # create a temp dir
-#     temp_dir = tempfile.mkdtemp()
-#     # create a temp file for each agent
-#     for agent_name, agent in parsed_json.items():
-#         agent_file = os.path.join(temp_dir, agent_name + ".json")
-#         with open(agent_file, "w") as f:
-#             json.dump(agent, f)
-
-#     # read each agent file as json
-#     for agent_name, agent in parsed_json.items():
-#         agent_file = os.path.join(temp_dir, agent_name + ".json")
-#         agent.load(agent_file)
-
-#     # remove the temp dir
-#     shutil.rmtree(temp_dir)
-
-#     st.rerun()
 
 
 def _sync_generator_from_kani_streammanager(kani_stream: StreamManager) -> Generator:
