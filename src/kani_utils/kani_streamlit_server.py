@@ -88,18 +88,6 @@ def _initialize_session_state(**kwargs):
 
 
 
-def _render_stream(stream):
-    print(stream)
-    current_agent = st.session_state.agents[st.session_state.current_agent_name]
-
-    if stream.role == ChatRole.ASSISTANT:
-        with st.chat_message("assistant", avatar = current_agent.avatar):
-            #async for token in stream:
-            with st.spinner(st.session_state.current_action):
-                st.write_stream(_sync_generator_from_kani_streammanager(stream))
-
-    return st.session_state.current_action
-
 
 # Render chat message
 def _render_message(message):
@@ -265,15 +253,26 @@ async def _handle_chat_input():
 
         st.session_state.current_action = "*Thinking...*"
 
-        async for stream in agent.full_round_stream(prompt):
-            st.session_state.current_action = _render_stream(stream)
-            message = await stream.message()
-            agent.display_messages.append(message)
-            st.session_state.current_action = _render_message(message)
+        messages = []
 
-            session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
-            info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
-            st.session_state.logger.info(info)
+        with st.chat_message("assistant", avatar = agent.avatar):
+            async for stream in agent.full_round_stream(prompt):
+                if stream.role == ChatRole.ASSISTANT:
+                    st.write_stream(_sync_generator_from_kani_streammanager(stream))
+
+                message = await stream.message()
+                messages.append(message)
+
+                session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+                info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
+                st.session_state.logger.info(info)
+
+        # add the last message to the display
+        agent.display_messages.append(messages[-1])
+        # then add all the others
+        agent.display_messages.extend(messages[:-1])
+        # finally, tell the agent to render all the delayed messages it has stored
+        agent.render_delayed_messages()
 
         st.session_state.lock_widgets = False  # Step 5: Unlock the UI
         st.rerun()

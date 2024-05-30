@@ -83,10 +83,21 @@ class StreamlitKani(EnhancedKani):
         super().__init__(*args, **kwargs)
 
         self.display_messages = []
+        self.delayed_display_messages = []
 
-    def render_in_streamlit_chat(self, func):
+
+    def render_in_streamlit_chat(self, func, delay = True):
         """Renders UI components in the chat. Takes a function that takes no parameters that should render the elements."""
-        self.display_messages.append(UIOnlyMessage(func))
+        if not delay:
+            self.display_messages.append(UIOnlyMessage(func))
+        else:
+            self.delayed_display_messages.append(UIOnlyMessage(func))
+
+
+    def render_delayed_messages(self):
+        self.display_messages.extend(self.delayed_display_messages)
+        self.delayed_display_messages = []
+
 
     def render_streamlit_ui(self):
         st.markdown(f"""
