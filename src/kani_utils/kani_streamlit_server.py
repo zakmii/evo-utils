@@ -150,20 +150,6 @@ def _render_message(message):
     
     return current_action
 
-def get_message_action_description(message):
-    desc = "Thinking..."
-    if message is None:
-        return desc
-
-    if message.tool_calls:
-        # use the most recent tool call
-        all_tool_calls = [tool_call.function.name for tool_call in message.tool_calls]
-        desc = f"*Checking sources: {', '.join(all_tool_calls)}*"
-
-    elif message.role == ChatRole.FUNCTION:
-        desc = f"*Evaluating...*"
-
-    return desc
 
 # ## kani agents have a save method:
 #     # def save(self, fp: PathLike, **kwargs):
@@ -278,10 +264,18 @@ async def _handle_chat_input():
         messages = []
         message = None
 
+        status = "Thinking..."
+
         with st.chat_message("assistant", avatar = agent.avatar):
             async for stream in agent.full_round_stream(prompt):
-                # if this is not a function result, stream data to the UI
-                with st.spinner(get_message_action_description(message)):
+                # compute the status as the most recent set of tool calls
+                if message is not None and message.tool_calls is not None:
+                    all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]
+                    distinct_tool_calls = set(all_tool_calls)
+                    status = f"Checking sources: {', '.join(distinct_tool_calls)}"
+
+                with st.spinner(status):
+                    # if this is not a function result, stream data to the UI
                     if stream.role == ChatRole.ASSISTANT:
                         st.write_stream(_sync_generator_from_kani_streammanager(stream))
 
