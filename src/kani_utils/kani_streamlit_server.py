@@ -246,8 +246,11 @@ async def _main():
 
 
         # if current_agent has a get_convo_cost method:
-        if hasattr(current_agent, "render_streamlit_ui"):
-           current_agent.render_streamlit_ui()
+        print(type(current_agent))
+        print(hasattr(current_agent, "render_streamlit_ui"))
+
+        if hasattr(current_agent, "render_sidebar"):
+           current_agent.render_sidebar()
 
         st.markdown("#")
         st.markdown("#")
@@ -268,7 +271,7 @@ async def _main():
         
 
 
-    st.header(st.session_state.current_agent_name)
+    st.header(current_agent.name)
 
     with st.chat_message("assistant", avatar = current_agent.avatar):
         st.write(current_agent.greeting)
