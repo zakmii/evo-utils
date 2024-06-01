@@ -7,7 +7,6 @@
 
 # kani_streamlit imports
 import kani_utils.kani_streamlit_server as ks
-from kani_utils.base_kanis import StreamlitKani
 
 # for reading API keys from .env file
 import os
@@ -17,7 +16,7 @@ import dotenv # pip install python-dotenv
 from kani.engines.openai import OpenAIEngine
 
 # load app-defined agents
-from demo_kanis import MediaKani, MemoryKani, FileKani, TableKani
+from demo_agents import WeatherKani, MemoryKani, FileKani, TableKani
 
 
 ########################
@@ -56,8 +55,8 @@ engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4o")
 # Agents are keyed by their name, which is what the user will see in the UI
 def get_agents():
     return {
-            "Media Agent": MediaKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
-            "Media Agent (No Costs Shown)": MediaKani(engine),
+            "Weather Agent": WeatherKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+            "Weather Agent (No Costs Shown)": WeatherKani(engine),
             "Memory Agent": MemoryKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
             "File Agent": FileKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
             "Table Agent": TableKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),

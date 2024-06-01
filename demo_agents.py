@@ -1,4 +1,7 @@
+from kani_utils.base_kanis import StreamlitKani
 from kani import AIParam, ai_function
+import streamlit as st
+
 from typing import Annotated
 import pandas as pd
 import pdfplumber
@@ -8,12 +11,11 @@ from kani import AIParam, ai_function
 from typing import Annotated
 import pandas as pd
 from pandasql import sqldf
-from kani_utils.base_kanis import StreamlitKani
 
 
 # StreamlitKani agents are Kani agents and work the same
 # We must subclass StreamlitKani instead of Kani to get the Streamlit UI
-class MediaKani(StreamlitKani):
+class WeatherKani(StreamlitKani):
     # Be sure to override the __init__ method to pass any parameters to the superclass
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,6 +33,8 @@ class MediaKani(StreamlitKani):
         # The description is shown in the sidebar and provides more information about the agent
         self.description = "An agent that demonstrates the basic capabilities of Streamlit+Kani."
 
+        self.search_history = []
+
     # Define the functions that the agent can call
     # See the Kani documentation for more information
     @ai_function()
@@ -39,6 +43,7 @@ class MediaKani(StreamlitKani):
         location: Annotated[str, AIParam(desc="The city and state, e.g. San Francisco, CA")],
     ):
         """Get the current weather in a given location."""
+        self.search_history.append(location)
 
         weather_df = pd.DataFrame({"date": ["2021-01-01", "2021-01-02", "2021-01-03"], "temp": [72, 73, 74]})
         mean_temp = weather_df.temp.mean()
@@ -52,16 +57,21 @@ class MediaKani(StreamlitKani):
 
         return f"Weather in {location}: Sunny, {mean_temp}F. A table of weather information will be shown in the chat for the user to see after your response."
 
-    @ai_function()
-    def entertain_user(self):
-        """Entertain the user by showing a video."""
 
-        self.render_in_streamlit_chat(lambda: st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+    ## StreamlitKanis can optionally define render_sidebar methods, which 
+    ## provide the UI elements to include in the sidebar that pertain to this agent
+    def render_sidebar(self):
+        # Call the superclass method to render the default sidebar elements
+        super().render_sidebar()
+        st.divider()
 
-        # Return values are a good spot to provide instructions or other info to the LLM
-        return "The video will be embedded in the chat after your response, but it will not autoplay. Tell the user you hope it doesn't 'let them down'."
+        st.markdown("### Search History")
+        st.caption("Previous searches:")
 
-
+        # render a list of memory keys stored in markdown
+        search_history = self.search_history
+        # markdown-formatted list
+        st.markdown("- " + "\n- ".join(search_history))
 
 
 # Demonstrates adding a key/value memory store to a Kani
