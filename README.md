@@ -62,8 +62,8 @@ class WeatherKani(StreamlitKani):
 
         # The name and greeting are shown at the start of the chat
         # The greeting is not known to the LLM, it serves as a prompt for the user
-        self.name = "Media Agent"
-        self.greeting = "Hello, I'm a demo assistant. You can ask me the weather, or to play a random video on youtube."
+        self.name = "Weather Agent"
+        self.greeting = "Hello, I'm a demo assistant. You can ask me the weather for a city, and I'll provide a table of fake data."
 
         # The description is shown in the sidebar and provides more information about the agent
         self.description = "An agent that demonstrates the basic capabilities of Streamlit+Kani."
@@ -79,11 +79,11 @@ the LLM, but the user can optionally see the full context of called functions an
 
 This function additionally renders the `pandas` dataframe directly in the chat UI using Streamlit's
 type-inferring `st.write()` function. Streamlit provides a [variety](https://docs.streamlit.io/develop/api-reference)
-of UI elements, and most are allowed, including a sequence or nesting of them. The rendering code *must* be provided as
+of UI elements, and most are allowed, including a sequence or nesting of them. The rendering code **must** be provided as
 a callable function.
 
 Rendered UI elements are by default displayed after the resulting answer from the Agent in the chat, even though
-`@ai_function()`s are typically called before the agent begins its answer (an artifact of the rendering and streaming
+`@ai_function()`s are typically called **before** the agent begins its answer (an artifact of the rendering and streaming
 process).
 
 ```python
