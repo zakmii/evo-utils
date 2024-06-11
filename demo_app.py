@@ -4,7 +4,6 @@
 ##### 0 - load libs
 ########################
 
-
 # kani_streamlit imports
 import kani_utils.kani_streamlit_server as ks
 
@@ -18,14 +17,12 @@ from kani.engines.openai import OpenAIEngine
 # load app-defined agents
 from demo_agents import WeatherKani, MemoryKani, FileKani, TableKani
 
+# read API keys .env file (e.g. set OPENAI_API_KEY=.... in .env and gitignore .env)
+dotenv.load_dotenv() 
 
 ########################
 ##### 1 - Configuration
 ########################
-
-# read API keys .env file (e.g. set OPENAI_API_KEY=.... in .env and gitignore .env)
-import dotenv
-dotenv.load_dotenv() 
 
 # initialize the application and set some page settings
 # parameters here are passed to streamlit.set_page_config, 

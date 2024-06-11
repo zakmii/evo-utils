@@ -6,17 +6,21 @@ using the [Kani](https://kani.readthedocs.io/en/latest/index.html) and [Streamli
 Features
 
 - Define multiple agents (for different engines and/or functionality)
-- Agents can display streamlit objects from custom functions (e.g. dataframes, images)
-- Agent-associated UI elements (e.g., file uploads)
+- Agents can render Streamlit elements to the chat stream (e.g. dataframes, images)
+- Agent-defined UI elements in the sidebar (e.g., file uploads)
 - Streaming responses
-- Optional full context for 
 - Token and cost accounting
+
+Screenshot:
+
+![screenshot](screenshot.png)
+
 
 See [demo_app.py](demo_app.py) and [demo_agents.py](demo_agents.py).
 
 ## Installation and Use
 
-#### 0. Install
+### 0. Install
 
 With `pip`, `poetry`, etc.
 
@@ -24,14 +28,14 @@ With `pip`, `poetry`, etc.
 pip install git+https://github.com/oneilsh/kani-utils.git
 ```
 
-#### 1. Define Agents
+### 1. Define Agents ([demo_agents.py](demo_agents.py))
 
 The `StreamlitKani` class extends [Kani](https://kani.readthedocs.io/en/latest/index.html), with additional
 functionality to intregate with the Streamlit server and UI elements. We'll need this and a few other imports
-from the `kani` and `streamlit` libraries in an `agents.py` or similar: 
+from the `kani` and `streamlit` libraries in a `demo_agents.py` or similar:
 
 ```python
-# agents.py
+# from demo_agents.py
 
 from kani_utils.base_kanis import StreamlitKani
 from kani import AIParam, ai_function
@@ -42,7 +46,7 @@ Let's define a `WeatherKani`, starting with the constructor, which should call t
 and define some expected agent properties. This agent will use `pandas` later.
 
 ```python
-# agents.py continued
+# demo_agents.py continued
 
 import pandas as pd
 
@@ -83,7 +87,7 @@ Rendered UI elements are by default displayed after the resulting answer from th
 process).
 
 ```python
-# agents.py continued
+# demo_agents.py continued
 
     @ai_function()
     def get_weather(self, location: Annotated[str, AIParam(desc="The city and state, e.g. San Francisco, CA")]):
@@ -106,7 +110,7 @@ idea to call `super().render_sidebar()` to render the sidebar for the parent cla
 defaults, add a divider and use level 3 headings and caption-sized font. 
 
 ```python
-# agents.py continued
+# demo_agents.py continued
 
     def render_sidebar(self):
         # Call the superclass method to render the default sidebar elements
@@ -120,15 +124,41 @@ defaults, add a divider and use level 3 headings and caption-sized font.
         st.markdown("- " + "\n- ".join(self.search_history))
 ```
 
+The [demo_agents.py](demo_agents.py) defines several other examples: a `MemoryKani` with an integrated
+key/value store, a `FileKani` that can read the contents of uploaded files, and a `TableKani` that
+can query uploaded CSV files as a relational database.
 
 
-#### 2. App Configuration
+### 2. App Configuration ([demo_app.py](demo_app.py))
 
-Here's where we initialize settings for the page. This MUST be called. Parameters here are
+First, we defined needed imports, and use `dotenv.load_dotenv()` to load the OpenAI API Key 
+from a `.env` file (which you will need to create, containing a line like `OPENAI_API_KEY=sk-...`)
+
+
+```python
+# kani_streamlit imports
+import kani_utils.kani_streamlit_server as ks
+
+# for reading API keys from .env file
+import os
+import dotenv # pip install python-dotenv
+
+# kani imports
+from kani.engines.openai import OpenAIEngine
+
+# load app-defined agents
+from demo_agents import WeatherKani, MemoryKani, FileKani, TableKani
+
+# read API keys .env file (e.g. set OPENAI_API_KEY=.... in .env and gitignore .env)
+dotenv.load_dotenv() 
+```
+
+Next we initialize settings for the page. This MUST be called. Parameters here are
 passed to `streamlit.set_page_config()`, see more at https://docs.streamlit.io/library/api-reference/utilities/st.set_page_config. 
 
 ```python
 ks.initialize_app_config(
+    show_function_calls = True,
     page_title = "StreamlitKani Demo",
     page_icon = "🦀", # can also be a URL
     initial_sidebar_state = "expanded", # or "expanded"
@@ -140,19 +170,49 @@ ks.initialize_app_config(
 )
 ```
 
-Finally, we start the app:
+Then, we define one more more engines (Kani supports popular [cloud and local models](https://kani.readthedocs.io/en/latest/engines.html)), and define a function that returns a dictionary mapping agent names
+to Kani agents. If `prompt_tokens_cost` and `completion_tokens_cost` (in dollars per 1k tokens), then
+conversation cost tracking will be enabled. This function is passed to `ks.set_app_agents()` to be used
+for initialization.
+
+```python
+# define an engine to use (see Kani documentation for more info)
+engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4o")
+
+# We also have to define a function that returns a dictionary of agents to serve
+# Agents are keyed by their name, which is what the user will see in the UI
+def get_agents():
+    return {
+            "Weather Agent": WeatherKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+            "Weather Agent (No Costs Shown)": WeatherKani(engine),
+            "Memory Agent": MemoryKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+            "File Agent": FileKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+            "Table Agent": TableKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+           }
+
+
+# tell the app to use that function to create agents when needed
+ks.set_app_agents(get_agents)
+```
+
+Finally, `ks.serve_app()` will start the streamlit server.
 
 ```python
 ks.serve_app()
 ```
 
-#### 3. Run Locally
+### 3. Run Locally
 
 Run the streamlit app:
 
 ```
 streamlit run demo_app.py
 ```
+
+### 4. Publish
+
+Use Streamlit's [publishing functionality](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app) to deploy publicly, using secrets to store API keys.
+
 
 # Changelog
  - 1.1: Added streaming output

@@ -22,12 +22,12 @@ class WeatherKani(StreamlitKani):
 
         # Define avatars for the agent and user
         # Can be URLs or emojis
-        self.avatar = "🎬"
+        self.avatar = "🌤️"
         self.user_avatar = "👤"
 
         # The name and greeting are shown at the start of the chat
         # The greeting is not known to the LLM, it serves as a prompt for the user
-        self.name = "Media Agent"
+        self.name = "Weather Agent"
         self.greeting = "Hello, I'm a demo assistant. You can ask me the weather, or to play a random video on youtube."
 
         # The description is shown in the sidebar and provides more information about the agent
