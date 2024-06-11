@@ -57,7 +57,7 @@ class WeatherKani(StreamlitKani):
 
         # Define avatars for the agent and user
         # Can be URLs or emojis
-        self.avatar = "🎬"
+        self.avatar = "🌤️"
         self.user_avatar = "👤"
 
         # The name and greeting are shown at the start of the chat
