@@ -1,11 +1,12 @@
 import streamlit as st
 import logging
 from kani import ChatRole, ChatMessage
+from kani.streaming import StreamManager
 import asyncio
-import tempfile
 import json
-import os
-import shutil
+import asyncio
+import nest_asyncio
+from typing import Generator
 
 class UIOnlyMessage:
     """
@@ -17,10 +18,11 @@ class UIOnlyMessage:
         icon (str, optional): The icon of the message. Defaults to "📊".
     """
 
-    def __init__(self, func, role=ChatRole.ASSISTANT, icon="📊"):
+    def __init__(self, func, role=ChatRole.ASSISTANT, icon="📊", type = "ui_element"):
         self.func = func
         self.role = role
         self.icon = icon
+        self.type = type
 
 
 def initialize_app_config(**kwargs):
@@ -88,7 +90,6 @@ def _initialize_session_state(**kwargs):
 
 
 
-
 # Render chat message
 def _render_message(message):
     current_agent = st.session_state.agents[st.session_state.current_agent_name]
@@ -96,6 +97,7 @@ def _render_message(message):
     current_user_avatar = current_agent.user_avatar
 
     current_action = "*Thinking...*"
+
 
     # first, check if this is a UIOnlyMessage,
     # if so, render it and return
@@ -105,138 +107,121 @@ def _render_message(message):
         else:
             role = "assistant"
 
-        with st.chat_message(role, avatar=message.icon):
-            message.func()
-        return current_action
+        if message.type == "ui_element":
+            with st.chat_message(role, avatar=message.icon):
+                message.func()
 
-    if message.role == ChatRole.USER:
+        elif message.type == "tool_use" and st.session_state.show_function_calls:
+            with st.chat_message(role, avatar=message.icon):
+                message.func()
+
+        return current_action
+    
+    elif message.role == ChatRole.USER:
         with st.chat_message("user", avatar = current_user_avatar):
-            st.write(message.content)
+            st.write(message.text)
 
     elif message.role == ChatRole.SYSTEM:
         with st.chat_message("assistant", avatar="ℹ️"):
-            st.write(message.content)
+            st.write(message.text)
 
-    elif message.role == ChatRole.ASSISTANT and message.tool_calls == None:
+    elif message.role == ChatRole.ASSISTANT and (message.tool_calls == None or message.tool_calls == []):
         with st.chat_message("assistant", avatar=current_agent_avatar):
-            st.write(message.content)
-
-    if st.session_state.show_function_calls:
-        if message.tool_calls:
-            for tool_call in message.tool_calls:
-                func_name = tool_call.function.name
-                func_arguments = tool_call.function.arguments
-                current_action = f"*Checking source ({func_name})...*"
-                with st.chat_message("assistant", avatar="🛠️"):
-                    st.text(f"{func_name}(params = {func_arguments})")
-
-        elif message.role == ChatRole.FUNCTION:
-            current_action = f"*Evaluating result ({message.name})...*"
-            with st.chat_message("assistant", avatar="✔️"):
-                # if message can be converted to json, use st.json, otherwise use text
-                try:
-                    st.json(json.loads(message.content))
-                except:
-                    st.text(message.content)
-
+            st.write(message.text)
     
     return current_action
 
-# ## kani agents have a save method:
-#     # def save(self, fp: PathLike, **kwargs):
-#     #     """Save the chat state of this kani to a JSON file. This will overwrite the file if it exists!
 
-#     #     :param fp: The path to the file to save.
-#     #     :param kwargs: Additional arguments to pass to Pydantic's ``model_dump_json``.
-#     #     """
-# ## so we will return create a JSON file for each agent,
-# ## and loop over all of those, reading them is as JSON so we 
-# ## can eventually return them to the user as a .json file
-# ## we will return a json object keyed by agent name, 
-# ## but only for those that have conversation_started set to True
-# ## finally, we'll create our temp files in an appropirate temp directory,
-# ## removing them when done for security
-# ## 
-# def _export_chats():
-#     # create a temp dir
-#     temp_dir = tempfile.mkdtemp()
-#     # create a temp file for each agent
-#     for agent_name, agent in st.session_state.agents.items():
-#         if agent.conversation_started:
-#             agent_file = os.path.join(temp_dir, agent_name + ".json")
-#             agent.save(agent_file)
+def _sync_generator_from_kani_streammanager(kani_stream: StreamManager) -> Generator:
+    """
+    Converts an asynchronous Kani StreamManager to a synchronous generator.
+    """
 
-#     # read each agent file as json
-#     agent_jsons = {}
-#     for agent_name, agent in st.session_state.agents.items():
-#         if agent.conversation_started:
-#             agent_file = os.path.join(temp_dir, agent_name + ".json")
-#             with open(agent_file) as f:
-#                 agent_jsons[agent_name] = json.load(f)
+    nest_asyncio.apply()
 
-#     # remove the temp dir
-#     shutil.rmtree(temp_dir)
+    loop = asyncio.get_event_loop()
+    queue = asyncio.Queue()
 
-#     return json.dumps(agent_jsons)
+    async def put_items_in_queue():
+        async for item in kani_stream:
+            await queue.put(item)
+        await queue.put(None)  # Sentinel to signal the end of the queue
 
-# ## this is the inverse of the above, using kani's 
-# ## correponding load():
-#     # def load(self, fp: PathLike, **kwargs):
-#     #     """Load chat state from a JSON file into this kani. This will overwrite any existing chat state!
+    async def runner():
+        await put_items_in_queue()
 
-#     #     :param fp: The path to the file containing the chat state.
-#     #     :param kwargs: Additional arguments to pass to Pydantic's ``model_validate_json``.
-#     #     """
-# def _import_chats(parsed_json):
-#     # reset all agents
-#     _clear_chat_all_agents()
-#     # create a temp dir
-#     temp_dir = tempfile.mkdtemp()
-#     # create a temp file for each agent
-#     for agent_name, agent in parsed_json.items():
-#         agent_file = os.path.join(temp_dir, agent_name + ".json")
-#         with open(agent_file, "w") as f:
-#             json.dump(agent, f)
+    def generator():
+        asyncio.ensure_future(runner())
 
-#     # read each agent file as json
-#     for agent_name, agent in parsed_json.items():
-#         agent_file = os.path.join(temp_dir, agent_name + ".json")
-#         agent.load(agent_file)
+        while True:
+            item = loop.run_until_complete(queue.get())
+            if item is None:  # Check for the sentinel value
+                break
+            yield item
 
-#     # remove the temp dir
-#     shutil.rmtree(temp_dir)
+    return generator()
 
-#     st.rerun()
 
 # Handle chat input and responses
 async def _handle_chat_input():
     if prompt := st.chat_input(disabled=st.session_state.lock_widgets, on_submit=_lock_ui):
-
+        # get current agent
         agent = st.session_state.agents[st.session_state.current_agent_name]
 
+        # add user message to display and agent's history
         user_message = ChatMessage.user(prompt)
         _render_message(user_message)
         agent.display_messages.append(user_message)
 
-        messages = agent.full_round(prompt)
+        session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+        info = {"session_id": session_id, "message": user_message.model_dump(), "agent": st.session_state.current_agent_name}
+        st.session_state.logger.info(info)
 
-        agent.conversation_started = True
 
         st.session_state.current_action = "*Thinking...*"
 
-        while True:
-            try:
-                with st.spinner(st.session_state.current_action):
-                    message = await anext(messages)
-                    agent.display_messages.append(message)
-                    st.session_state.current_action = _render_message(message)
-       
-                    session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
-                    info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
-                    st.session_state.logger.info(info)
-            except StopAsyncIteration:
-                break
+        messages = []
+        message = None
 
+        status = "Thinking..."
+
+        with st.chat_message("assistant", avatar = agent.avatar):
+            async for stream in agent.full_round_stream(prompt):
+                # compute the status as the most recent set of tool calls
+                if message is not None and message.tool_calls is not None:
+                    all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]
+                    distinct_tool_calls = set(all_tool_calls)
+                    status = f"Checking sources: {', '.join(distinct_tool_calls)}"
+
+                with st.spinner(status):
+                    # if this is not a function result, stream data to the UI
+                    if stream.role == ChatRole.ASSISTANT:
+                        st.write_stream(_sync_generator_from_kani_streammanager(stream))
+
+                # when the message is done, add it to the list
+                message = await stream.message()
+                messages.append(message)
+
+                # logging
+                info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
+                st.session_state.logger.info(info)
+
+
+        # add the last message to the display
+        agent.display_messages.append(messages[-1])
+        # then any delayed UI-based messages
+        agent.render_delayed_messages()
+        
+        # put together a UI element for the collected calls, and add it to the display list labeled as a tool use
+        def render_messages():
+            with st.expander("Full context"):
+                all_json = [message.model_dump() for message in messages]
+                st.write(all_json)
+
+        render_context = UIOnlyMessage(render_messages, role=ChatRole.SYSTEM, icon="🛠️", type="tool_use")
+        agent.display_messages.append(render_context)
+
+        # unlock and rerun to clean rerender
         st.session_state.lock_widgets = False  # Step 5: Unlock the UI
         st.rerun()
 
@@ -261,8 +246,11 @@ async def _main():
 
 
         # if current_agent has a get_convo_cost method:
-        if hasattr(current_agent, "render_streamlit_ui"):
-           current_agent.render_streamlit_ui()
+        print(type(current_agent))
+        print(hasattr(current_agent, "render_streamlit_ui"))
+
+        if hasattr(current_agent, "render_sidebar"):
+           current_agent.render_sidebar()
 
         st.markdown("#")
         st.markdown("#")
@@ -273,7 +261,7 @@ async def _main():
                   on_click=_clear_chat_all_agents, 
                   disabled=st.session_state.lock_widgets)
         
-        st.checkbox("🛠️ Show calls to external tools", 
+        st.checkbox("🛠️ Show full context options", 
                     key="show_function_calls", 
                     disabled=st.session_state.lock_widgets)
         
@@ -283,7 +271,7 @@ async def _main():
         
 
 
-    st.header(st.session_state.current_agent_name)
+    st.header(current_agent.name)
 
     with st.chat_message("assistant", avatar = current_agent.avatar):
         st.write(current_agent.greeting)
