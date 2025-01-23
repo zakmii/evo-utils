@@ -28,7 +28,7 @@ class WeatherKani(StreamlitKani):
         # The name and greeting are shown at the start of the chat
         # The greeting is not known to the LLM, it serves as a prompt for the user
         self.name = "Weather Agent"
-        self.greeting = "Hello, I'm a demo assistant. You can ask me the weather, or to play a random video on youtube."
+        self.greeting = "Hello, I'm a demo assistant. You can ask me the weather!"
 
         # The description is shown in the sidebar and provides more information about the agent
         self.description = "An agent that demonstrates the basic capabilities of Streamlit+Kani."
@@ -55,7 +55,7 @@ class WeatherKani(StreamlitKani):
         # finished streaming to the UI, resulting in UI elements appearing after the response text
         self.render_in_streamlit_chat(lambda: st.write(weather_df))
 
-        return f"Weather in {location}: Sunny, {mean_temp}F. A table of weather information will be shown in the chat for the user to see after your response."
+        return f"Weather in {location}: Sunny, {mean_temp}F. A table of weather information will be shown in the chat for the user to see after your response. Note for the user that the displayed data are notional, and your programming does not actually query an API at this time."
 
 
     ## StreamlitKanis can optionally define render_sidebar methods, which 
