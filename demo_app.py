@@ -15,7 +15,8 @@ import dotenv # pip install python-dotenv
 from kani.engines.openai import OpenAIEngine
 
 # load app-defined agents
-from demo_agents import WeatherKani, MemoryKani, FileKani, TableKani
+from demo_agents import AuthorSearchKani, MemoryKani, FileKani, TableKani
+
 
 # read API keys .env file (e.g. set OPENAI_API_KEY=.... in .env and gitignore .env)
 dotenv.load_dotenv() 
@@ -52,8 +53,8 @@ engine = OpenAIEngine(os.environ["OPENAI_API_KEY"], model="gpt-4o")
 # Agents are keyed by their name, which is what the user will see in the UI
 def get_agents():
     return {
-            "Weather Agent": WeatherKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
-            "Weather Agent (No Costs Shown)": WeatherKani(engine),
+            "Author Search Agent": AuthorSearchKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+            "Author Search Agent (No costs shown)": AuthorSearchKani(engine),
             "Memory Agent": MemoryKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
             "File Agent": FileKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
             "Table Agent": TableKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),

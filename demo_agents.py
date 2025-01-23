@@ -11,51 +11,54 @@ from kani import AIParam, ai_function
 from typing import Annotated
 import pandas as pd
 from pandasql import sqldf
+import requests
 
 
 # StreamlitKani agents are Kani agents and work the same
 # We must subclass StreamlitKani instead of Kani to get the Streamlit UI
-class WeatherKani(StreamlitKani):
+class AuthorSearchKani(StreamlitKani):
     # Be sure to override the __init__ method to pass any parameters to the superclass
     def __init__(self, *args, **kwargs):
+        # if you have a system prompt, add it to the kwargs before calling super()
+        kwargs["system_prompt"] = "You are a chatbot assistant that can help users find the author of a book. Always use the search_author function to find the author of a book."
+
         super().__init__(*args, **kwargs)
 
         # Define avatars for the agent and user
         # Can be URLs or emojis
-        self.avatar = "🌤️"
+        self.avatar = "📚"
         self.user_avatar = "👤"
 
         # The name and greeting are shown at the start of the chat
         # The greeting is not known to the LLM, it serves as a prompt for the user
-        self.name = "Weather Agent"
-        self.greeting = "Hello, I'm a demo assistant. You can ask me the weather!"
-
+        self.name = "Author Search Agent"
+        self.greeting = "Hello, I'm a demo assistant. You can ask me to look up the author of a book, for example, 'Who wrote The Sorcerer's Stone?'"
+        
         # The description is shown in the sidebar and provides more information about the agent
         self.description = "An agent that demonstrates the basic capabilities of Streamlit+Kani."
 
+        # we can define any other instance variables we need for the agent
         self.search_history = []
 
-    # Define the functions that the agent can call
-    # See the Kani documentation for more information
     @ai_function()
-    def get_weather(
-        self,
-        location: Annotated[str, AIParam(desc="The city and state, e.g. San Francisco, CA")],
-    ):
-        """Get the current weather in a given location."""
-        self.search_history.append(location)
+    def search_author(self, query: Annotated[str, AIParam(desc="The query to search for.")]):
+        """Search for an author and return their name and alternative names."""
 
-        weather_df = pd.DataFrame({"date": ["2021-01-01", "2021-01-02", "2021-01-03"], "temp": [72, 73, 74]})
-        mean_temp = weather_df.temp.mean()
+        # add the search to the search history
+        self.search_history.append(query)
 
-        # You can use the Streamlit API to render things in the UI in the chat
-        # Do so by passing a function to the render_in_streamlit_chat method; it should take no paramters
-        # (but you can refer to data in the outer scope, for example to use st.write() to display a pandas dataframe)
-        # note that the provided anonymous function will be called by default *after* the current response has
-        # finished streaming to the UI, resulting in UI elements appearing after the response text
-        self.render_in_streamlit_chat(lambda: st.write(weather_df))
+        # use requests lib to make the GET call and parse the result
+        response = requests.get(f"https://openlibrary.org/search.json?q={query}&fields=author_name,author_alternative_name&limit=1").json()
+        author_name = response["docs"][0]["author_name"][0]
+        alternative_names = response["docs"][0]["author_alternative_name"]
 
-        return f"Weather in {location}: Sunny, {mean_temp}F. A table of weather information will be shown in the chat for the user to see after your response. Note for the user that the displayed data are notional, and your programming does not actually query an API at this time."
+        alt_names_df = pd.DataFrame({"alternative_names": alternative_names})
+
+        # render the response in the chat; Streamlit has nice defaults for many data types, including pandas dataframes
+        self.render_in_streamlit_chat(lambda: st.write(alt_names_df))
+
+        # the return value is sent to the agent; the user can see the response by expanding the "full context" if enabled
+        return f"Author: {author_name}. Alternative names: {', '.join(alternative_names)} The user has also been shown a table of alternative names."
 
 
     ## StreamlitKanis can optionally define render_sidebar methods, which 
@@ -72,6 +75,7 @@ class WeatherKani(StreamlitKani):
         search_history = self.search_history
         # markdown-formatted list
         st.markdown("- " + "\n- ".join(search_history))
+
 
 
 # Demonstrates adding a key/value memory store to a Kani
@@ -142,7 +146,7 @@ class FileKani(MemoryKani):
         super().__init__(*args, **kwargs)
 
         self.name = "File Agent"
-        self.greeting = "Hello, I'm a demo assistant. You can upload files and I can see their contents. I can work with text, PDF, and JSON files."
+        self.greeting = "Hello, I'm a demo assistant. You can upload files and I can see their contents. I can work with text, PDF, and JSON files. Note that I do not currently implement chunking or RAG of large documents."
         self.description = "An agent that can read file contents."
 
 
@@ -207,7 +211,7 @@ class TableKani(FileKani):
         super().__init__(*args, **kwargs)
 
         self.name = "Tabular Data Agent"
-        self.greeting = "Hello, I'm a demo assistant. You can upload files and I can see their contents. If you upload CSV files, I can read them as data frames, store them in memory, and query them like an SQL database."
+        self.greeting = "Hello, I'm a demo assistant. You can upload files and I can see their contents. If you upload CSV files, I can read them as data frames, store them in memory, and query them like an SQL database.\n\nAlternatively, you can ask me to generate and query some example data by asking '*Please generate a set of example relational tables, save them to your local database, and run an example query on them.*'"
         self.description = "An agent that can read CSV files and query them as SQL tables."
 
 
@@ -223,7 +227,16 @@ class TableKani(FileKani):
         st.caption("Uploaded CSV files can be ingested as tables on request and later queried with SQL. The following tables are currently stored:")
         st.markdown("- " + sep.join(table_names))
 
-
+    @ai_function()
+    def save_to_table(self, tbl_json: Annotated[str, AIParam(desc="The JSON string to save as a table. Uses pd.read_json()")]):
+        """Save a JSON string as a table in memory."""
+        try:
+            df = pd.read_json(tbl_json)
+            table_name = f"TABLE_{len(self.memory)}"
+            self.memory[table_name] = df
+            return f"Table saved in memory key '{table_name}'."
+        except Exception as e:
+            return f"Error: {e}"
 
     @ai_function()
     # todo: convert to something like "load_csv_files" that takes a list of files,
