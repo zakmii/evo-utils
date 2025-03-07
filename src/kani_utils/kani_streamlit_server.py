@@ -25,8 +25,10 @@ def initialize_app_config(**kwargs):
     # this is kind of a hack, we want the user to be able to configure the default settings for
     # which needs to be set in the session state, so we pass in kwargs to _initialize_session_state() above, but they can't 
     # go to set_page_config below, so we remove them here
-    del kwargs["show_function_calls"]
-    del kwargs["share_chat_ttl_seconds"]
+    if "show_function_calls" in kwargs:
+        del kwargs["show_function_calls"]
+    if "share_chat_ttl_seconds" in kwargs:
+        del kwargs["share_chat_ttl_seconds"]
 
     defaults = {
         "page_title": "Kani AI",
