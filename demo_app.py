@@ -39,7 +39,7 @@ ks.initialize_app_config(
             "Report a Bug": "https://github.com/.../issues",
             "About": "StreamlitKani is a Streamlit-based UI for Kani agents.",
         },
-    share_chat_ttl_seconds = 60*60*24*0.5, # 60 days
+    share_chat_ttl_seconds = (60 * 60 * 24) * 60, # 60 days
 )
 
 

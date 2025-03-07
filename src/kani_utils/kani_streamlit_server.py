@@ -307,66 +307,76 @@ def _share_chat():
         st.write(f"Error saving chat.")
 
 
+def _render_shared_chat():
+    session_id = st.query_params["session_id"]
+
+    try:
+        redis = Redis.from_env()
+        str_rep = redis.get(session_id)
+        
+        if str_rep is None:
+            # throw an exception to trigger the error message
+            raise ValueError(f"Session ID {session_id} not found in database")
+        
+        ttl_seconds = st.session_state.share_chat_ttl_seconds
+        res = redis.expire(session_id, ttl_seconds)
+        print(res)
+        
+        ttl_human = _seconds_to_days_hours(redis.ttl(session_id))
+        bytes_rep = base64.b64decode(str_rep.encode('utf-8'))
+        to_load = dill.loads(bytes_rep)
+
+        display_messages = to_load["display_messages"]
+        agent_name = to_load["agent_name"]
+        agent_greeting = to_load["agent_greeting"]
+        agent_description = to_load["agent_description"]
+        agent_system_prompt = to_load["agent_system_prompt"]
+        agent_chat_cost = to_load["agent_chat_cost"]
+        agent_avatar = to_load["agent_avatar"]
+        agent_model = to_load["agent_model"]
+        
+        # override show_function_calls to False, but only once
+        if "first_func_calls_off_flag" not in st.session_state:
+            st.session_state.show_function_calls = False
+            st.session_state.first_func_calls_off_flag = True
+
+
+        # write the system prompt as an expander
+        with st.expander("Details"):
+            st.markdown(f"##### This chat record will expire in {ttl_human}. Revisiting this URL will reset the expiration timer.")
+            st.markdown(f"You can chat with this and other agents [here](/), selecting *{agent_name}* in the sidebar.")
+            st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f}")
+            st.markdown("**Agent Description:** " + str(agent_description))
+            st.markdown("**Agent Model:** " + str(agent_model))
+            st.markdown("**Agent System Prompt:**\n```\n" + str(agent_system_prompt) + "\n```")
+            # chat cost rounded up to nearest 0.01
+    
+            # render checkbox for showing function calls
+            st.checkbox("🛠️ Show full message contexts", 
+                        key="show_function_calls",
+                        value = False)
+
+
+        st.header(agent_name)
+
+        with st.chat_message("assistant", avatar = agent_avatar):
+            st.write(agent_greeting)
+
+        for message in display_messages:
+            _render_message(message)
+
+    except Exception as e:
+        st.session_state.logger.error(f"Error connecting to Redis: {e}")
+        st.write(f"Error connecting to database.")
+
+
 # Main Streamlit UI
 async def _main():
 
     if "session_id" in st.query_params:
-        session_id = st.query_params["session_id"]
-
-        try:
-            redis = Redis.from_env()
-            str_rep = redis.get(session_id)
-            
-            if str_rep is None:
-                # throw an exception to trigger the error message
-                raise ValueError(f"Session ID {session_id} not found in database")
-            
-            ttl_human = _seconds_to_days_hours(redis.ttl(session_id))
-            bytes_rep = base64.b64decode(str_rep.encode('utf-8'))
-            to_load = dill.loads(bytes_rep)
-
-            display_messages = to_load["display_messages"]
-            agent_name = to_load["agent_name"]
-            agent_greeting = to_load["agent_greeting"]
-            agent_description = to_load["agent_description"]
-            agent_system_prompt = to_load["agent_system_prompt"]
-            agent_chat_cost = to_load["agent_chat_cost"]
-            agent_avatar = to_load["agent_avatar"]
-            agent_model = to_load["agent_model"]
-            
-            # override show_function_calls to False, but only once
-            if "first_func_calls_off_flag" not in st.session_state:
-                st.session_state.show_function_calls = False
-                st.session_state.first_func_calls_off_flag = True
-
-
-            # write the system prompt as an expander
-            with st.expander("Details"):
-                st.markdown(f"##### This chat record will expire in {ttl_human}. Revisiting this URL will reset the expiration timer.")
-                st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f}")
-                st.markdown("**Agent Description:** " + str(agent_description))
-                st.markdown("**Agent Model:** " + str(agent_model))
-                st.markdown("**Agent System Prompt:**\n```\n" + str(agent_system_prompt) + "\n```")
-                # chat cost rounded up to nearest 0.01
-        
-                # render checkbox for showing function calls
-                st.checkbox("🛠️ Show full message contexts", 
-                            key="show_function_calls",
-                            value = False)
-
-
-            st.header(agent_name)
-
-            with st.chat_message("assistant", avatar = agent_avatar):
-                st.write(agent_greeting)
-
-            for message in display_messages:
-                _render_message(message)
-
-        except Exception as e:
-            st.session_state.logger.error(f"Error connecting to Redis: {e}")
-            st.write(f"Error connecting to database.")
-
+        _render_shared_chat()
+        return
+    
     else:
         _render_sidebar()
 
