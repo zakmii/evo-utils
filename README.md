@@ -10,6 +10,7 @@ Features
 - Agent-defined UI elements in the sidebar (e.g., file uploads)
 - Streaming responses
 - Token and cost accounting
+- **New** sharable chats
 
 Screenshot:
 
