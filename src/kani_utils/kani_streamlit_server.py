@@ -322,7 +322,6 @@ def _render_shared_chat():
         
         ttl_seconds = st.session_state.share_chat_ttl_seconds
         res = redis.expire(session_id, ttl_seconds)
-        print(res)
         
         ttl_human = _seconds_to_days_hours(redis.ttl(session_id))
         bytes_rep = base64.b64decode(str_rep.encode('utf-8'))
@@ -347,16 +346,15 @@ def _render_shared_chat():
         with st.expander("Details"):
             st.markdown(f"##### This chat record will expire in {ttl_human}. Revisiting this URL will reset the expiration timer.")
             st.markdown(f"You can chat with this and other agents [here](/), selecting *{agent_name}* in the sidebar.")
-            st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f}")
-            st.markdown("**Agent Description:** " + str(agent_description))
-            st.markdown("**Agent Model:** " + str(agent_model))
-            st.markdown("**Agent System Prompt:**\n```\n" + str(agent_system_prompt) + "\n```")
-            # chat cost rounded up to nearest 0.01
-    
             # render checkbox for showing function calls
             st.checkbox("🛠️ Show full message contexts", 
                         key="show_function_calls",
                         value = False)
+            st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f}") # rounded up to 1c
+            st.markdown("**Agent Description:** " + str(agent_description))
+            st.markdown("**Agent Model:** " + str(agent_model))
+            st.markdown("**Agent System Prompt:**")
+            st.code(str(agent_system_prompt), language=None, wrap_lines=True, line_numbers=True)
 
 
         st.header(agent_name)
