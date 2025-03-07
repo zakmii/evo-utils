@@ -188,8 +188,7 @@ dotenv.load_dotenv()
 
 Next we initialize settings for the page. This MUST be called. Parameters here are
 passed to `streamlit.set_page_config()`, see more at https://docs.streamlit.io/library/api-reference/utilities/st.set_page_config. 
-If using chat sharing, `share_chat_ttl_seconds` defines the number of seconds a shared chat is stored once generated. The default is 60 days;
-each visit to the URL resets the timer.
+If using chat sharing, `share_chat_ttl_seconds` defines the number of seconds a shared chat is stored once generated. The default is 30 days if unset, and each visit to the URL resets the timer.
 
 ```python
 ks.initialize_app_config(
