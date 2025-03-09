@@ -306,13 +306,13 @@ def _share_chat():
         convo_cost = current_agent.get_convo_cost()
 
         # chat_data stores the agents display_messages, greeting, system_prompt
-        save_dict = {"chat_data": chat_data_str_rep,
+        save_dict = {"summary": agent_based_summary,
                      "agent_name": current_agent.name,
-                     "agent_description": current_agent.description,
                      "agent_chat_cost": convo_cost,
                      "agent_model": agent_model,
-                     "summary": agent_based_summary,
-                     "access_count": access_count
+                     "agent_description": current_agent.description,
+                     "access_count": access_count,
+                     "chat_data": chat_data_str_rep,
                      }
 
         # save the chat with a new TTL
