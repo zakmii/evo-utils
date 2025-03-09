@@ -2,14 +2,13 @@ import streamlit as st
 import logging
 from kani import ChatRole, ChatMessage
 import asyncio
-import asyncio
 from upstash_redis import Redis
 import base64
 import dill
 import hashlib
 import urllib.parse
 from kani_utils.utils import _seconds_to_days_hours, _sync_generator_from_kani_streammanager
-
+import json
 
 class UIOnlyMessage:
     def __init__(self, func, role=ChatRole.ASSISTANT, icon="💡", type = "ui_element"):
@@ -273,31 +272,56 @@ def _share_chat():
     try:
         current_agent = st.session_state.agents[st.session_state.current_agent_name]
 
-        agent_model = current_agent.engine.model if current_agent.engine.model else "Unknown"
-
-        to_save = {"display_messages": current_agent.display_messages,
-                   "agent_name": current_agent.name,
+        ## encode the chat data
+        chat_data_dict = {"display_messages": current_agent.display_messages,
                    "agent_greeting": current_agent.greeting,
-                   "agent_description": current_agent.description,
                    "agent_system_prompt": current_agent.system_prompt,
-                   "agent_chat_cost": current_agent.get_convo_cost(),
                    "agent_avatar": current_agent.avatar,
-                   "agent_model": agent_model}
+                   }
 
-        bytes_rep = dill.dumps(to_save)
-        str_rep = base64.b64encode(bytes_rep).decode('utf-8')
+        chat_data_bytes_rep = dill.dumps(chat_data_dict)
+        chat_data_str_rep = base64.b64encode(chat_data_bytes_rep).decode('utf-8')
+
+        # generate chat summary
+        async def summarize():
+            agent_based_summary_prompt = "I am preparing to share this chat with others. Please summarize it in a few sentences."
+            agent_based_summary = await current_agent.chat_round_str(agent_based_summary_prompt)
+            return agent_based_summary
+        
+        agent_based_summary = asyncio.run(summarize())
+
 
         redis = Redis.from_env()
 
-        # we need a unique session ID for this chat as an alphanumeric hex string
-        # need to safely url encode the current_agent.name to avoid issues; need proper data cleaning
-        key = st.session_state.page_title + "@" + current_agent.name + "@" + hashlib.md5(str_rep.encode()).hexdigest()
+        # generate convo key, and compute access count (0 if new)
+        key = st.session_state.page_title + "@" + current_agent.name + "@" + hashlib.md5(chat_data_str_rep.encode()).hexdigest()
+        keycheck = redis.get(key)
+
+        access_count = 0
+        if keycheck is not None:
+            access_count = keycheck["access_count"] + 1
+
+        # computed metadata
+        agent_model = current_agent.engine.model if current_agent.engine.model else "Unknown"
+        convo_cost = current_agent.get_convo_cost()
+
+        # chat_data stores the agents display_messages, greeting, system_prompt
+        save_dict = {"chat_data": chat_data_str_rep,
+                     "agent_name": current_agent.name,
+                     "agent_description": current_agent.description,
+                     "agent_chat_cost": convo_cost,
+                     "agent_model": agent_model,
+                     "summary": agent_based_summary,
+                     "access_count": access_count
+                     }
+
+        # save the chat with a new TTL
+        new_ttl_seconds = st.session_state.share_chat_ttl_seconds
+        redis.set(key, save_dict, ex=new_ttl_seconds)
+
+        # display the share dialog
         url = urllib.parse.quote(key)
-        ttl_seconds = st.session_state.share_chat_ttl_seconds
-        redis.set(key, str_rep, ex=ttl_seconds)
-
-
-        ttl_human = _seconds_to_days_hours(ttl_seconds)
+        ttl_human = _seconds_to_days_hours(new_ttl_seconds)
 
         @st.dialog("Share Chat")
         def share_dialog():
@@ -313,36 +337,49 @@ def _render_shared_chat():
     session_id = st.query_params["session_id"]
 
     try:
+        # load the session data from the given key
         redis = Redis.from_env()
-        str_rep = redis.get(session_id)
-        
-        if str_rep is None:
-            # throw an exception to trigger the error message
-            raise ValueError(f"Session ID {session_id} not found in database")
-        
-        ttl_seconds = st.session_state.share_chat_ttl_seconds
-        res = redis.expire(session_id, ttl_seconds)
-        
-        ttl_human = _seconds_to_days_hours(redis.ttl(session_id))
-        bytes_rep = base64.b64decode(str_rep.encode('utf-8'))
-        to_load = dill.loads(bytes_rep)
+        session_dict_raw = redis.get(session_id)
+        session_dict = json.loads(session_dict_raw)
 
-        display_messages = to_load["display_messages"]
-        agent_name = to_load["agent_name"]
-        agent_greeting = to_load["agent_greeting"]
-        agent_description = to_load["agent_description"]
-        agent_system_prompt = to_load["agent_system_prompt"]
-        agent_chat_cost = to_load["agent_chat_cost"]
-        agent_avatar = to_load["agent_avatar"]
-        agent_model = to_load["agent_model"]
+        if session_dict is None:
+            # throw an exception to trigger the error message
+            raise ValueError(f"Session Key {session_id} not found in database")
+        
+        chat_data_str_rep = session_dict["chat_data"]
+        chat_data_bytes_rep = base64.b64decode(chat_data_str_rep.encode('utf-8'))
+        chat_data = dill.loads(chat_data_bytes_rep)
+
+        # update ttl and access count, save back to redis
+        new_ttl_seconds = st.session_state.share_chat_ttl_seconds
+        access_count = session_dict["access_count"] + 1
+        session_dict["access_count"] = access_count
+
+        redis.set(session_id, session_dict, ex=new_ttl_seconds)
+
+
+        # load chat data
+        display_messages = chat_data["display_messages"]
+        agent_system_prompt = chat_data["agent_system_prompt"]
+        agent_greeting = chat_data["agent_greeting"]
+        agent_avatar = chat_data["agent_avatar"]
+
+        # load other metadata
+        agent_name = session_dict["agent_name"]
+        agent_description = session_dict["agent_description"]
+        agent_chat_cost = session_dict["agent_chat_cost"]
+        agent_model = session_dict["agent_model"]
+        agent_summary = session_dict["summary"]
         
         # override show_function_calls to False, but only once
         if "first_func_calls_off_flag" not in st.session_state:
             st.session_state.show_function_calls = False
             st.session_state.first_func_calls_off_flag = True
 
+        # compute the human-readable TTL
+        ttl_human = _seconds_to_days_hours(redis.ttl(session_id))
 
-        # write the system prompt as an expander
+        # display session details in expander
         with st.expander("Details"):
             st.markdown(f"##### This chat record will expire in {ttl_human}. Revisiting this URL will reset the expiration timer.")
             st.markdown(f"You can chat with this and other agents [here](/), selecting *{agent_name}* in the sidebar.")
@@ -350,12 +387,16 @@ def _render_shared_chat():
             st.checkbox("🛠️ Show full message contexts", 
                         key="show_function_calls",
                         value = False)
-            st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f}") # rounded up to 1c
+            st.markdown("**Chat summary:** " + str(agent_summary))
+            st.markdown("**Chat access count:** " + str(access_count))
+            st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f} (includes summary generation)") # rounded up to 1c
             st.markdown("**Agent Description:** " + str(agent_description))
             st.markdown("**Agent Model:** " + str(agent_model))
             st.markdown("**Agent System Prompt:**")
             st.code(str(agent_system_prompt), language=None, wrap_lines=True, line_numbers=True)
 
+
+        # display the chat as in the main UI: agent name, greeting, messages
 
         st.header(agent_name)
 
