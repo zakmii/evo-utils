@@ -52,6 +52,8 @@ class StreamlitKani(EnhancedKani):
 
         self.display_messages = []
         self.delayed_display_messages = []
+        # not working
+        #self.buttons = []
 
 
     def render_in_streamlit_chat(self, func, delay = True):

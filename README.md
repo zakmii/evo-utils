@@ -251,6 +251,7 @@ Use Streamlit's [publishing functionality](https://docs.streamlit.io/deploy/stre
 
 
 # Changelog
+ - 1.3.1: Slightly better status reporting during function calling
  - 1.3: Better metadata for shared chats, including access count and chat summary
  - 1.2: Sharable chats! Minor UI adjustments, implements single-agent chat clear. Bugfixes: keep focus on chat input.
  - 1.1: Added streaming output

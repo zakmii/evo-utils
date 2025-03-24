@@ -9,6 +9,7 @@ import hashlib
 import urllib.parse
 from kani_utils.utils import _seconds_to_days_hours, _sync_generator_from_kani_streammanager
 import json
+import random
 
 class UIOnlyMessage:
     def __init__(self, func, role=ChatRole.ASSISTANT, icon="💡", type = "ui_element"):
@@ -133,46 +134,43 @@ def _render_message(message):
     return current_action
 
 
+async def _process_input(prompt):
+    # get current agent
+    agent = st.session_state.agents[st.session_state.current_agent_name]
 
-# Handle chat input and responses
-async def _handle_chat_input():
-    #if prompt := st.chat_input(disabled=st.session_state.lock_widgets, on_submit=_lock_ui):
-    if prompt := st.chat_input(disabled=False, on_submit=_lock_ui):
-        # get current agent
-        agent = st.session_state.agents[st.session_state.current_agent_name]
+    # add user message to display and agent's history
+    user_message = ChatMessage.user(prompt)
+    _render_message(user_message)
+    agent.display_messages.append(user_message)
 
-        # add user message to display and agent's history
-        user_message = ChatMessage.user(prompt)
-        _render_message(user_message)
-        agent.display_messages.append(user_message)
-
-        session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
-        info = {"session_id": session_id, "message": user_message.model_dump(), "agent": st.session_state.current_agent_name}
-        st.session_state.logger.info(info)
+    session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+    info = {"session_id": session_id, "message": user_message.model_dump(), "agent": st.session_state.current_agent_name}
+    st.session_state.logger.info(info)
 
 
-        st.session_state.current_action = "*Thinking...*"
+    st.session_state.current_action = "*Thinking...*"
 
-        messages = []
-        message = None
+    messages = []
+    message = None
 
-        status = "Thinking..."
+    status = "Thinking..."
 
-        with st.chat_message("assistant", avatar = agent.avatar):
+    with st.chat_message("assistant", avatar = agent.avatar):
+        with st.status(status) as status:
             async for stream in agent.full_round_stream(prompt):
+                if stream.role == ChatRole.ASSISTANT:
+                    st.write_stream(_sync_generator_from_kani_streammanager(stream))
+
+                message = await stream.message()
+
                 # compute the status as the most recent set of tool calls
                 if message is not None and message.tool_calls is not None:
-                    all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]
-                    distinct_tool_calls = set(all_tool_calls)
-                    status = f"Checking sources: {', '.join(distinct_tool_calls)}"
+                    # I don't think message.tool_calls is ever None, but just in case
+                    if(len(message.tool_calls) > 0):
+                        all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]
+                        distinct_tool_calls = set(all_tool_calls)
+                        status.update(label = f"Checking sources: {', '.join(distinct_tool_calls)}")
 
-                with st.spinner(status):
-                    # if this is not a function result, stream data to the UI
-                    if stream.role == ChatRole.ASSISTANT:
-                        st.write_stream(_sync_generator_from_kani_streammanager(stream))
-
-                # when the message is done, add it to the list
-                message = await stream.message()
                 messages.append(message)
 
                 # logging
@@ -180,23 +178,34 @@ async def _handle_chat_input():
                 st.session_state.logger.info(info)
 
 
-        # add the last message to the display
-        agent.display_messages.append(messages[-1])
-        # then any delayed UI-based messages
-        agent.render_delayed_messages()
-        
-        # put together a UI element for the collected calls, and add it to the display list labeled as a tool use
-        def render_messages():
-            with st.expander("Full context"):
-                all_json = [message.model_dump() for message in messages]
-                st.write(all_json)
+    # add the last message to the display
+    agent.display_messages.append(messages[-1])
+    # then any delayed UI-based messages
+    agent.render_delayed_messages()
+    
+    # put together a UI element for the collected calls, and add it to the display list labeled as a tool use
+    def render_messages():
+        with st.expander("Full context"):
+            all_json = [message.model_dump() for message in messages]
+            st.write(all_json)
 
-        render_context = UIOnlyMessage(render_messages, role=ChatRole.SYSTEM, icon="🛠️", type="tool_use")
-        agent.display_messages.append(render_context)
+    render_context = UIOnlyMessage(render_messages, role=ChatRole.SYSTEM, icon="🛠️", type="tool_use")
+    agent.display_messages.append(render_context)
 
-        # unlock and rerun to clean rerender
-        st.session_state.lock_widgets = False  # Step 5: Unlock the UI        
-        st.rerun()
+    # unlock and rerun to clean rerender
+    st.session_state.lock_widgets = False  # Step 5: Unlock the UI        
+    st.rerun()
+
+
+# Handle chat input and responses
+async def _handle_chat_input(given_prompt = None):
+    if prompt := st.chat_input(disabled=False, on_submit=_lock_ui):
+        await _process_input(prompt)
+        return
+
+    # not working...    
+    # if given_prompt:
+    #     await _process_input(given_prompt)
 
 
 # Lock the UI when user submits input
@@ -427,6 +436,15 @@ async def _main():
 
         with st.chat_message("assistant", avatar = current_agent.avatar):
             st.write(current_agent.greeting)
+
+        # not working...
+        # def _send_button_to_chat(button_text):
+        #     asyncio.run(_handle_chat_input(button_text))
+        #     #await _handle_chat_input(button_text)
+
+        # if current_agent.buttons:
+        #     for button in current_agent.buttons:
+        #         st.button(button, on_click=_send_button_to_chat, args=(button,))
 
         for message in current_agent.display_messages:
             _render_message(message)
