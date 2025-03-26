@@ -153,29 +153,29 @@ async def _process_input(prompt):
     messages = []
     message = None
 
-    status = "Thinking..."
+    orig_status = "Thinking..."
+    status = st.status(orig_status)
 
     with st.chat_message("assistant", avatar = agent.avatar):
-        with st.status(status) as status:
-            async for stream in agent.full_round_stream(prompt):
-                if stream.role == ChatRole.ASSISTANT:
-                    st.write_stream(_sync_generator_from_kani_streammanager(stream))
+        async for stream in agent.full_round_stream(prompt):
+            if stream.role == ChatRole.ASSISTANT:
+                st.write_stream(_sync_generator_from_kani_streammanager(stream))
 
-                message = await stream.message()
+            message = await stream.message()
 
-                # compute the status as the most recent set of tool calls
-                if message is not None and message.tool_calls is not None:
-                    # I don't think message.tool_calls is ever None, but just in case
-                    if(len(message.tool_calls) > 0):
-                        all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]
-                        distinct_tool_calls = set(all_tool_calls)
-                        status.update(label = f"Checking sources: {', '.join(distinct_tool_calls)}")
+            # compute the status as the most recent set of tool calls
+            if message is not None and message.tool_calls is not None:
+                # I don't think message.tool_calls is ever None, but just in case
+                if(len(message.tool_calls) > 0):
+                    all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]
+                    distinct_tool_calls = set(all_tool_calls)
+                    status.update(label = f"Checking sources: {', '.join(distinct_tool_calls)}")
 
-                messages.append(message)
+            messages.append(message)
 
-                # logging
-                info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
-                st.session_state.logger.info(info)
+            # logging
+            info = {"session_id": session_id, "message": message.model_dump(), "agent": st.session_state.current_agent_name}
+            st.session_state.logger.info(info)
 
 
     # add the last message to the display
