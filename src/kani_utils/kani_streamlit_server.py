@@ -29,6 +29,8 @@ def initialize_app_config(**kwargs):
         del kwargs["show_function_calls"]
     if "share_chat_ttl_seconds" in kwargs:
         del kwargs["share_chat_ttl_seconds"]
+    if "show_function_calls_status" in kwargs:
+        del kwargs["show_function_calls_status"]
 
     defaults = {
         "page_title": "Kani AI",
@@ -84,10 +86,8 @@ def _initialize_session_state(**kwargs):
     ttl_seconds = kwargs.get("share_chat_ttl_seconds", 60*60*24*30)  # 30 days default
     st.session_state.setdefault("share_chat_ttl_seconds", ttl_seconds)
 
-    if "show_function_calls" in kwargs:
-        st.session_state.setdefault("show_function_calls", kwargs["show_function_calls"])
-    else:
-        st.session_state.setdefault("show_function_calls", False)
+    st.session_state.setdefault("show_function_calls", kwargs.get("show_function_calls", False))
+    st.session_state.setdefault("show_function_calls_status", kwargs.get("show_function_calls_status", True))
 
 
 
@@ -153,8 +153,9 @@ async def _process_input(prompt):
     messages = []
     message = None
 
-    orig_status = "Thinking..."
-    status = st.status(orig_status)
+    if st.session_state.show_function_calls_status:
+        orig_status = "Thinking..."
+        status = st.status(orig_status)
 
     with st.chat_message("assistant", avatar = agent.avatar):
         async for stream in agent.full_round_stream(prompt):
@@ -164,7 +165,7 @@ async def _process_input(prompt):
             message = await stream.message()
 
             # compute the status as the most recent set of tool calls
-            if message is not None and message.tool_calls is not None:
+            if message is not None and message.tool_calls is not None and st.session_state.show_function_calls_status:
                 # I don't think message.tool_calls is ever None, but just in case
                 if(len(message.tool_calls) > 0):
                     all_tool_calls = [f"`{tool_call.function.name}`" for tool_call in message.tool_calls]

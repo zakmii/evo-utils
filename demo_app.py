@@ -31,9 +31,10 @@ dotenv.load_dotenv()
 # this function MUST be run first
 ks.initialize_app_config(
     show_function_calls = True,
+    show_function_calls_status = True,
     page_title = "StreamlitKani Demo",
     page_icon = "🦀", # can also be a URL
-    initial_sidebar_state = "expanded", # or "expanded"
+    initial_sidebar_state = "expanded", # or "collapsed"
     menu_items = {
             "Get Help": "https://github.com/.../issues",
             "Report a Bug": "https://github.com/.../issues",

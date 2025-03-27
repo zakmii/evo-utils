@@ -190,9 +190,15 @@ Next we initialize settings for the page. This MUST be called. Parameters here a
 passed to `streamlit.set_page_config()`, see more at https://docs.streamlit.io/library/api-reference/utilities/st.set_page_config. 
 If using chat sharing, `share_chat_ttl_seconds` defines the number of seconds a shared chat is stored once generated. The default is 30 days if unset, and each visit to the URL resets the timer.
 
+By default `show_function_calls_status` is set to `True` which causes the chat to display which function(s) are being
+called at any given time. You may wish to disable this if you want to have your agents handle their own status updates, 
+since they can use `st.spinner` and other Streamlit UI elements in the chat. These are not persisted when the message is
+finished.
+
 ```python
 ks.initialize_app_config(
-    show_function_calls = True,
+    show_function_calls = True,                      # whether the "Show full context" checkbox is checked initially
+    show_function_calls_status = True,               # whether to show function calls spinner
     page_title = "StreamlitKani Demo",
     page_icon = "🦀", # can also be a URL
     initial_sidebar_state = "expanded", # or "expanded"
@@ -251,6 +257,7 @@ Use Streamlit's [publishing functionality](https://docs.streamlit.io/deploy/stre
 
 
 # Changelog
+ - 1.4.0: Optional display of function call status
  - 1.3.1: Slightly better status reporting during function calling
  - 1.3: Better metadata for shared chats, including access count and chat summary
  - 1.2: Sharable chats! Minor UI adjustments, implements single-agent chat clear. Bugfixes: keep focus on chat input.
