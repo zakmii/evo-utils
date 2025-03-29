@@ -135,6 +135,8 @@ def _render_message(message):
 
 
 async def _process_input(prompt):
+    prompt = prompt.strip()
+
     # get current agent
     agent = st.session_state.agents[st.session_state.current_agent_name]
 

@@ -257,6 +257,7 @@ Use Streamlit's [publishing functionality](https://docs.streamlit.io/deploy/stre
 
 
 # Changelog
+ - 1.4.1: Strip whitespace from beginning/end of user prompts.
  - 1.4.0: Optional display of function call status
  - 1.3.1: Slightly better status reporting during function calling
  - 1.3: Better metadata for shared chats, including access count and chat summary
