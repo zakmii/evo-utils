@@ -19,6 +19,17 @@ class UIOnlyMessage:
         self.type = type # the type of message, e.g. "ui_element" or "tool_use"
 
 
+def get_img_as_base64(file_path:str):
+    """Load an image file and return it as a base64 encoded string."""
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except Exception as e:
+        st.warning(f"Could not load image {file_path}: {str(e)}")
+        return None
+
+
 def initialize_app_config(**kwargs):
     _initialize_session_state(**kwargs)
 
@@ -31,6 +42,14 @@ def initialize_app_config(**kwargs):
         del kwargs["share_chat_ttl_seconds"]
     if "show_function_calls_status" in kwargs:
         del kwargs["show_function_calls_status"]
+    if "logo_path" in kwargs:
+        st.session_state.logo_path = kwargs.pop("logo_path")
+    if "app_title" in kwargs:
+        st.session_state.app_title = kwargs.pop("app_title")
+    if "background_image" in kwargs:
+        st.session_state.background_image = kwargs.pop("background_image")
+    if "theme_color" in kwargs:
+        st.session_state.theme_color = kwargs.pop("theme_color")
 
     defaults = {
         "page_title": "Kani AI",
@@ -64,10 +83,72 @@ def set_app_agents(agents_func, reinit = False):
 
 
 def serve_app():
+    _apply_visual_styling()
     assert "agents" in st.session_state, "No agents have been set. Use set_app_agents() to set agents prior to serve_app()"
     loop = st.session_state.get("event_loop")
     
     loop.run_until_complete(_main())
+
+
+def _apply_visual_styling():
+    """Apply visual styling with customization options"""
+    try:
+        # Get custom background or use default
+        background_url = st.session_state.get(
+            "background_image", 
+            "https://www.nayuki.io/res/animated-floating-graph-nodes/floating-graph-nodes.png"
+        )
+        
+        # Get custom theme color or use default
+        theme_color = st.session_state.get("theme_color", "rgba(0,0,0,0.7)")
+        
+        # Apply background with customizations
+        page_bg_img = f"""
+        <style>
+        [data-testid="stAppViewContainer"] {{
+            background-image: linear-gradient({theme_color}, {theme_color}),
+                        url("{background_url}");
+            background-size: cover;
+            background-position: center;
+        }}
+
+        [data-testid="stHeader"] {{ 
+            background-color: rgba(0,0,0,0);
+        }}
+        
+        /* Custom hover CSS for sections */
+        .hover-section {{
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            padding: 1rem;
+            border-radius: 4px;
+        }}
+        .hover-section:hover {{
+            transform: translateY(-15px) scale(1.02);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+        }}
+        
+        /* Custom navigation styling */
+        .nav-link {{
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            display: inline-block;
+            width: 100%;
+            color: #444;
+        }}
+        .nav-link:hover {{
+            background-color: #f0f2f6;
+        }}
+        .nav-link.active {{
+            background-color: #e6e9ef;
+            font-weight: bold;
+        }}
+        </style>
+        """
+        st.markdown(page_bg_img, unsafe_allow_html=True)
+    except Exception as e:
+        st.session_state.logger.warning(f"Could not set background: {str(e)}")
 
 
 
@@ -85,6 +166,15 @@ def _initialize_session_state(**kwargs):
     st.session_state.setdefault("lock_widgets", False)
     ttl_seconds = kwargs.get("share_chat_ttl_seconds", 60*60*24*30)  # 30 days default
     st.session_state.setdefault("share_chat_ttl_seconds", ttl_seconds)
+
+    # Default UI configurations
+    st.session_state.setdefault("logo_path", kwargs.get("logo_path", None))
+    st.session_state.setdefault("app_title", kwargs.get("app_title", "AI Assistant"))
+    st.session_state.setdefault("background_image", kwargs.get("background_image", 
+                                "https://www.nayuki.io/res/animated-floating-graph-nodes/floating-graph-nodes.png"))
+    st.session_state.setdefault("theme_color", kwargs.get("theme_color", "rgba(0,0,0,0.7)"))
+    st.session_state.setdefault("show_logo", kwargs.get("show_logo", True))
+    st.session_state.setdefault("sidebar_content", kwargs.get("sidebar_content", None))
 
     st.session_state.setdefault("show_function_calls", kwargs.get("show_function_calls", False))
     st.session_state.setdefault("show_function_calls_status", kwargs.get("show_function_calls_status", True))
@@ -228,33 +318,71 @@ def _render_sidebar():
     current_agent = st.session_state.agents[st.session_state.current_agent_name]
 
     with st.sidebar:
+        # Customizable logo and title section
+        if st.session_state.get("show_logo", True):
+            logo_path = st.session_state.get("logo_path")
+            app_title = st.session_state.get("app_title", "AI Assistant")
+            
+            if logo_path:
+                # Logo image available
+                logo_base64 = get_img_as_base64(logo_path)
+                if logo_base64:
+                    st.markdown(f"""
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                            <img src="data:image/png;base64,{logo_base64}" alt="Logo" style="height: 150px;">
+                            <h1 style="margin: 0; font-size: 44px;">{app_title}</h1>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    # Fallback if image can't be loaded
+                    st.markdown(f"""
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                            <h1 style="margin: 0; font-size: 44px;">{app_title}</h1>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                # No logo, just title
+                st.markdown(f"""
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                        <h1 style="margin: 0; font-size: 44px;">{app_title}</h1>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        # Custom sidebar content can be injected here
+        if st.session_state.get("sidebar_content"):
+            sidebar_content = st.session_state.get("sidebar_content")
+            st.markdown(sidebar_content, unsafe_allow_html=True)
+        
+        st.markdown("---")
+
+        # Agent selection with improved styling
         agent_names = list(st.session_state.agents.keys())
-
-        ## First: teh dropdown of agent selections
-        current_agent_name = st.selectbox(label = "**Assistant**", 
-                                          options=agent_names, 
-                                          key="current_agent_name", 
-                                          disabled=st.session_state.lock_widgets, 
-                                          label_visibility="visible")
-
+        
+        st.markdown("### Choose Assistant")
+        current_agent_name = st.selectbox(
+            label="**Assistant**", 
+            options=agent_names, 
+            key="current_agent_name", 
+            disabled=st.session_state.lock_widgets, 
+            label_visibility="visible"
+        )
 
         ## then the agent gets to render its sidebar info
         if hasattr(current_agent, "render_sidebar"):
            current_agent.render_sidebar()
 
-        st.markdown("#")
-        st.markdown("#")
-        st.markdown("#")
-        st.markdown("#")
+        st.markdown("---")
 
-        ## global UI elements
+        ## global UI elements with better styling
         col1, col2 = st.columns(2)
 
         with col1:
-            st.button(label = "Clear Chat", 
-                      on_click=_clear_chat_current_agent, 
-                      disabled=st.session_state.lock_widgets,
-                      use_container_width=True)
+            st.button(
+                label="Clear Chat", 
+                on_click=_clear_chat_current_agent, 
+                disabled=st.session_state.lock_widgets,
+                use_container_width=True
+            )
             
         # Try to get the database size from redis and log it
         dbsize = None
@@ -262,20 +390,25 @@ def _render_sidebar():
             redis = Redis.from_env()
             dbsize = redis.dbsize()
             st.session_state.logger.info(f"Shared chats DB size: {dbsize}")
-
         except Exception as e:
-            st.session_state.logger.error(f"Error connecting to database, or no database to connect to.")
+            st.session_state.logger.error(f"Error connecting to database, or no database to connect to: {str(e)}")
         
         if dbsize is not None:
             with col2:
-                st.button(label = "Share Chat",
-                          on_click=_share_chat,
-                          disabled=st.session_state.lock_widgets,
-                          use_container_width=True)
+                st.button(
+                    label="Share Chat",
+                    on_click=_share_chat,
+                    disabled=st.session_state.lock_widgets,
+                    use_container_width=True
+                )
         
-        st.checkbox("🛠️ Show full context", 
-                    key="show_function_calls", 
-                    disabled=st.session_state.lock_widgets)
+        # Optional UI elements based on configuration
+        if st.session_state.get("show_function_calls_option", True):
+            st.checkbox(
+                "🛠️ Show full context", 
+                key="show_function_calls", 
+                disabled=st.session_state.lock_widgets
+            )
         
         st.markdown("---")
 
@@ -346,6 +479,7 @@ def _share_chat():
 
 
 def _render_shared_chat():
+    _apply_visual_styling()
     session_id = st.query_params["session_id"]
 
     try:
@@ -435,19 +569,33 @@ async def _main():
 
         current_agent = st.session_state.agents[st.session_state.current_agent_name]
 
-        st.header(current_agent.name)
+        # Enhanced header with styling and customizable formatting
+        header_style = st.session_state.get("header_style", "margin-bottom: 20px;")
+        st.markdown(f"""
+            <h1 style="{header_style}">{current_agent.name}</h1>
+        """, unsafe_allow_html=True)
 
-        with st.chat_message("assistant", avatar = current_agent.avatar):
+        # Custom chat container styling
+        greeting_container_class = st.session_state.get("greeting_container_class", "hover-section")
+        
+        with st.chat_message("assistant", avatar=current_agent.avatar):
+            # Apply the styling with CSS instead of wrapping with div
+            st.markdown(f"""
+                <style>
+                .stMarkdown {{
+                    /* Inherit styles from hover-section class */
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    padding: 1rem;
+                    border-radius: 4px;
+                }}
+                .stMarkdown:hover {{
+                    transform: translateY(-15px) scale(1.02);
+                    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+                }}
+                </style>
+            """, unsafe_allow_html=True)
+            # Write the greeting directly without HTML wrapping
             st.write(current_agent.greeting)
-
-        # not working...
-        # def _send_button_to_chat(button_text):
-        #     asyncio.run(_handle_chat_input(button_text))
-        #     #await _handle_chat_input(button_text)
-
-        # if current_agent.buttons:
-        #     for button in current_agent.buttons:
-        #         st.button(button, on_click=_send_button_to_chat, args=(button,))
 
         for message in current_agent.display_messages:
             _render_message(message)
