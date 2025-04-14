@@ -31,25 +31,33 @@ def get_img_as_base64(file_path:str):
 
 
 def initialize_app_config(**kwargs):
+    """Initialize app configuration with support for custom pages."""
     _initialize_session_state(**kwargs)
 
     # this is kind of a hack, we want the user to be able to configure the default settings for
-    # which needs to be set in the session state, so we pass in kwargs to _initialize_session_state() above, but they can't 
+    # which needs to be set in the session state, so we pass in kwargs to _initialize_session_state() above, but they can't
     # go to set_page_config below, so we remove them here
-    if "show_function_calls" in kwargs:
-        del kwargs["show_function_calls"]
-    if "share_chat_ttl_seconds" in kwargs:
-        del kwargs["share_chat_ttl_seconds"]
-    if "show_function_calls_status" in kwargs:
-        del kwargs["show_function_calls_status"]
-    if "logo_path" in kwargs:
-        st.session_state.logo_path = kwargs.pop("logo_path")
-    if "app_title" in kwargs:
-        st.session_state.app_title = kwargs.pop("app_title")
-    if "background_image" in kwargs:
-        st.session_state.background_image = kwargs.pop("background_image")
-    if "theme_color" in kwargs:
-        st.session_state.theme_color = kwargs.pop("theme_color")
+    # Handle custom configuration parameters
+    params_to_remove = [
+        "show_function_calls", "share_chat_ttl_seconds", "show_function_calls_status",
+        "logo_path", "app_title", "background_image", "theme_color", "custom_pages"
+    ]
+
+    for param in params_to_remove:
+        if param in kwargs:
+            if param == "logo_path":
+                st.session_state.logo_path = kwargs.pop(param)
+            elif param == "app_title":
+                st.session_state.app_title = kwargs.pop(param)
+            elif param == "background_image":
+                st.session_state.background_image = kwargs.pop(param)
+            elif param == "theme_color":
+                st.session_state.theme_color = kwargs.pop(param)
+            elif param == "custom_pages":
+                # Save to session state AND remove from kwargs to avoid the error
+                st.session_state.custom_pages = kwargs.pop("custom_pages", {})
+            else:
+                kwargs.pop(param)
 
     defaults = {
         "page_title": "Kani AI",
@@ -80,13 +88,27 @@ def set_app_agents(agents_func, reinit = False):
         if not reinit:
             st.session_state.current_agent_name = list(st.session_state.agents.keys())[0]
 
+    # Ensure current_agent_name is set even if agents are already in session_state
+    if "current_agent_name" not in st.session_state and "agents" in st.session_state:
+        st.session_state.current_agent_name = list(st.session_state.agents.keys())[0]
+
+
+def set_custom_pages(pages_dict):
+    """
+    Set custom pages for the application.
+
+    Args:
+        pages_dict: Dictionary mapping page_id to a tuple of (page_name, page_function, icon)
+                   where page_function is a callable that renders the page content
+    """
+    st.session_state.custom_pages = pages_dict
 
 
 def serve_app():
     _apply_visual_styling()
     assert "agents" in st.session_state, "No agents have been set. Use set_app_agents() to set agents prior to serve_app()"
     loop = st.session_state.get("event_loop")
-    
+
     loop.run_until_complete(_main())
 
 
@@ -95,13 +117,13 @@ def _apply_visual_styling():
     try:
         # Get custom background or use default
         background_url = st.session_state.get(
-            "background_image", 
+            "background_image",
             "https://www.nayuki.io/res/animated-floating-graph-nodes/floating-graph-nodes.png"
         )
-        
+
         # Get custom theme color or use default
         theme_color = st.session_state.get("theme_color", "rgba(0,0,0,0.7)")
-        
+
         # Apply background with customizations
         page_bg_img = f"""
         <style>
@@ -112,10 +134,10 @@ def _apply_visual_styling():
             background-position: center;
         }}
 
-        [data-testid="stHeader"] {{ 
+        [data-testid="stHeader"] {{
             background-color: rgba(0,0,0,0);
         }}
-        
+
         /* Custom hover CSS for sections */
         .hover-section {{
             transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -126,7 +148,7 @@ def _apply_visual_styling():
             transform: translateY(-15px) scale(1.02);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
         }}
-        
+
         /* Custom navigation styling */
         .nav-link {{
             padding: 8px 16px;
@@ -170,7 +192,7 @@ def _initialize_session_state(**kwargs):
     # Default UI configurations
     st.session_state.setdefault("logo_path", kwargs.get("logo_path", None))
     st.session_state.setdefault("app_title", kwargs.get("app_title", "AI Assistant"))
-    st.session_state.setdefault("background_image", kwargs.get("background_image", 
+    st.session_state.setdefault("background_image", kwargs.get("background_image",
                                 "https://www.nayuki.io/res/animated-floating-graph-nodes/floating-graph-nodes.png"))
     st.session_state.setdefault("theme_color", kwargs.get("theme_color", "rgba(0,0,0,0.7)"))
     st.session_state.setdefault("show_logo", kwargs.get("show_logo", True))
@@ -179,7 +201,46 @@ def _initialize_session_state(**kwargs):
     st.session_state.setdefault("show_function_calls", kwargs.get("show_function_calls", False))
     st.session_state.setdefault("show_function_calls_status", kwargs.get("show_function_calls_status", True))
 
+    # Add navigation state
+    st.session_state.setdefault("current_page", "intro")  # Changed default to 'intro'
 
+    # Setup default pages
+    default_pages = {
+        "intro": ("Introduction", _show_intro_page, None),
+        "chat": ("Chatbot", None, None),  # Chat is handled separately
+        "tutorial": ("Tutorial", _show_tutorial_page, None),
+        "about": ("About Us", _show_about_page, None),
+    }
+
+    # Merge default pages with custom pages
+    custom_pages = kwargs.get("custom_pages", {})
+    all_pages = {**default_pages, **custom_pages}
+    st.session_state.setdefault("pages", all_pages)
+
+    # Add navigation menu style
+    st.session_state.setdefault(
+        "nav_style",
+        """
+        <style>
+        .nav-link {
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            display: inline-block;
+            width: 100%;
+            color: #444;
+        }
+        .nav-link:hover {
+            background-color: #f0f2f6;
+        }
+        .nav-link.active {
+            background-color: #e6e9ef;
+            font-weight: bold;
+        }
+        </style>
+        """
+    )
 
 
 # Render chat message
@@ -208,7 +269,7 @@ def _render_message(message):
                 message.func()
 
         return current_action
-    
+
     elif message.role == ChatRole.USER:
         with st.chat_message("user", avatar = current_user_avatar):
             st.write(message.text)
@@ -220,7 +281,7 @@ def _render_message(message):
     elif message.role == ChatRole.ASSISTANT and (message.tool_calls == None or message.tool_calls == []):
         with st.chat_message("assistant", avatar=current_agent_avatar):
             st.write(message.text)
-    
+
     return current_action
 
 
@@ -275,7 +336,7 @@ async def _process_input(prompt):
     agent.display_messages.append(messages[-1])
     # then any delayed UI-based messages
     agent.render_delayed_messages()
-    
+
     # put together a UI element for the collected calls, and add it to the display list labeled as a tool use
     def render_messages():
         with st.expander("Full context"):
@@ -286,7 +347,7 @@ async def _process_input(prompt):
     agent.display_messages.append(render_context)
 
     # unlock and rerun to clean rerender
-    st.session_state.lock_widgets = False  # Step 5: Unlock the UI        
+    st.session_state.lock_widgets = False  # Step 5: Unlock the UI
     st.rerun()
 
 
@@ -296,7 +357,7 @@ async def _handle_chat_input(given_prompt = None):
         await _process_input(prompt)
         return
 
-    # not working...    
+    # not working...
     # if given_prompt:
     #     await _process_input(given_prompt)
 
@@ -315,14 +376,19 @@ def _clear_chat_current_agent():
 
 
 def _render_sidebar():
-    current_agent = st.session_state.agents[st.session_state.current_agent_name]
+    """Render the sidebar with dynamic pages based on session state."""
+    # Only try to access current_agent if we're on the chat page and agents exist
+    current_agent = None
+    if "agents" in st.session_state and "current_agent_name" in st.session_state:
+        if st.session_state.current_agent_name in st.session_state.agents:
+            current_agent = st.session_state.agents[st.session_state.current_agent_name]
 
     with st.sidebar:
         # Customizable logo and title section
         if st.session_state.get("show_logo", True):
             logo_path = st.session_state.get("logo_path")
             app_title = st.session_state.get("app_title", "AI Assistant")
-            
+
             if logo_path:
                 # Logo image available
                 logo_base64 = get_img_as_base64(logo_path)
@@ -347,70 +413,101 @@ def _render_sidebar():
                         <h1 style="margin: 0; font-size: 44px;">{app_title}</h1>
                     </div>
                 """, unsafe_allow_html=True)
-        
+
         # Custom sidebar content can be injected here
         if st.session_state.get("sidebar_content"):
             sidebar_content = st.session_state.get("sidebar_content")
             st.markdown(sidebar_content, unsafe_allow_html=True)
-        
-        st.markdown("---")
-
-        # Agent selection with improved styling
-        agent_names = list(st.session_state.agents.keys())
-        
-        st.markdown("### Choose Assistant")
-        current_agent_name = st.selectbox(
-            label="**Assistant**", 
-            options=agent_names, 
-            key="current_agent_name", 
-            disabled=st.session_state.lock_widgets, 
-            label_visibility="visible"
-        )
-
-        ## then the agent gets to render its sidebar info
-        if hasattr(current_agent, "render_sidebar"):
-           current_agent.render_sidebar()
 
         st.markdown("---")
 
-        ## global UI elements with better styling
-        col1, col2 = st.columns(2)
+        # Navigation menu - dynamically render based on pages in session state
+        # Custom CSS for navigation
+        st.markdown(st.session_state.nav_style, unsafe_allow_html=True)
 
-        with col1:
-            st.button(
-                label="Clear Chat", 
-                on_click=_clear_chat_current_agent, 
+        # Navigation buttons with active state
+        for page_id, page_info in st.session_state.pages.items():
+            # Safely handle different tuple formats by unpacking with defaults
+            if isinstance(page_info, tuple):
+                if len(page_info) >= 3:
+                    page_name, _, icon = page_info
+                elif len(page_info) == 2:
+                    page_name, _, icon = page_info[0], page_info[1], None
+                else:
+                    page_name, _, icon = page_info[0], None, None
+            else:
+                # Handle case where page_info is not a tuple
+                page_name, _, icon = str(page_info), None, None
+
+            button_label = page_name
+            if icon:
+                button_label = f"{icon} {page_name}"
+
+            if st.button(
+                button_label,
+                key=f"nav_{page_id}",
+                help=f"Go to {page_name} page",
+                use_container_width=True,
+            ):
+                st.session_state.current_page = page_id
+                st.rerun()
+
+        st.markdown("---")
+
+        # Only show agent controls on chat page if agents exist
+        if st.session_state.current_page == "chat" and current_agent is not None and "agents" in st.session_state:
+            # Agent selection with improved styling
+            agent_names = list(st.session_state.agents.keys())
+
+            st.markdown("### Choose Assistant")
+            current_agent_name = st.selectbox(
+                label="**Assistant**",
+                options=agent_names,
+                key="current_agent_name",
                 disabled=st.session_state.lock_widgets,
-                use_container_width=True
+                label_visibility="visible"
             )
-            
-        # Try to get the database size from redis and log it
-        dbsize = None
-        try:
-            redis = Redis.from_env()
-            dbsize = redis.dbsize()
-            st.session_state.logger.info(f"Shared chats DB size: {dbsize}")
-        except Exception as e:
-            st.session_state.logger.error(f"Error connecting to database, or no database to connect to: {str(e)}")
-        
-        if dbsize is not None:
-            with col2:
+
+            ## then the agent gets to render its sidebar info
+            if hasattr(current_agent, "render_sidebar"):
+               current_agent.render_sidebar()
+
+            ## global UI elements with better styling
+            col1, col2 = st.columns(2)
+
+            with col1:
                 st.button(
-                    label="Share Chat",
-                    on_click=_share_chat,
+                    label="Clear Chat",
+                    on_click=_clear_chat_current_agent,
                     disabled=st.session_state.lock_widgets,
                     use_container_width=True
                 )
-        
-        # Optional UI elements based on configuration
-        if st.session_state.get("show_function_calls_option", True):
-            st.checkbox(
-                "🛠️ Show full context", 
-                key="show_function_calls", 
-                disabled=st.session_state.lock_widgets
-            )
-        
-        st.markdown("---")
+
+            # Try to get the database size from redis and log it
+            dbsize = None
+            try:
+                redis = Redis.from_env()
+                dbsize = redis.dbsize()
+                st.session_state.logger.info(f"Shared chats DB size: {dbsize}")
+            except Exception as e:
+                st.session_state.logger.error(f"Error connecting to database, or no database to connect to: {str(e)}")
+
+            if dbsize is not None:
+                with col2:
+                    st.button(
+                        label="Share Chat",
+                        on_click=_share_chat,
+                        disabled=st.session_state.lock_widgets,
+                        use_container_width=True
+                    )
+
+            # Optional UI elements based on configuration
+            if st.session_state.get("show_function_calls_option", True):
+                st.checkbox(
+                    "🛠️ Show full context",
+                    key="show_function_calls",
+                    disabled=st.session_state.lock_widgets
+                )
 
 
 def _share_chat():
@@ -432,7 +529,7 @@ def _share_chat():
             agent_based_summary_prompt = "I am preparing to share this chat with others. Please summarize it in a few sentences."
             agent_based_summary = await current_agent.chat_round_str(agent_based_summary_prompt)
             return agent_based_summary
-        
+
         agent_based_summary = asyncio.run(summarize())
 
 
@@ -491,7 +588,7 @@ def _render_shared_chat():
         if session_dict is None:
             # throw an exception to trigger the error message
             raise ValueError(f"Session Key {session_id} not found in database")
-        
+
         chat_data_str_rep = session_dict["chat_data"]
         chat_data_bytes_rep = base64.b64decode(chat_data_str_rep.encode('utf-8'))
         chat_data = dill.loads(chat_data_bytes_rep)
@@ -516,7 +613,7 @@ def _render_shared_chat():
         agent_chat_cost = session_dict["agent_chat_cost"]
         agent_model = session_dict["agent_model"]
         agent_summary = session_dict["summary"]
-        
+
         # override show_function_calls to False, but only once
         if "first_func_calls_off_flag" not in st.session_state:
             st.session_state.show_function_calls = False
@@ -530,7 +627,7 @@ def _render_shared_chat():
             st.markdown(f"##### This chat record will expire in {ttl_human}. Revisiting this URL will reset the expiration timer.")
             st.markdown(f"You can chat with this and other agents [here](/), selecting *{agent_name}* in the sidebar.")
             # render checkbox for showing function calls
-            st.checkbox("🛠️ Show full message contexts", 
+            st.checkbox("🛠️ Show full message contexts",
                         key="show_function_calls",
                         value = False)
             st.markdown("**Chat summary:** " + str(agent_summary))
@@ -557,50 +654,174 @@ def _render_shared_chat():
         st.write(f"Error connecting to database.")
 
 
+# Content display functions
+def _show_intro_page():
+    """Show the Introduction page with content"""
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center;">
+            <!-- Main heading text -->
+            <h1 style="margin-right: 10px;">Welcome to the AI Assistant</h1>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # --- INTRO SECTIONS ---
+    st.markdown(
+        """
+        <div class="hover-section">
+          <h2>What is this assistant?</h2>
+          <p>
+            This is an AI-powered assistant designed to help you with various tasks.
+            It can answer questions, provide information, and assist with your needs.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="hover-section">
+            <h2>Key Features</h2>
+            <ul>
+              <li><strong>Intelligent Responses:</strong> Get smart, contextual answers to your questions</li>
+              <li><strong>Tool Integration:</strong> The assistant can use various tools to help solve problems</li>
+              <li><strong>Customizable:</strong> Adapt the assistant to your specific needs</li>
+            </ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("---")
+
+    # Centered button with custom styling
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("Start Chatting →", use_container_width=True):
+            st.session_state.current_page = "chat"
+            st.rerun()
+
+
+def _show_tutorial_page():
+    """Show the tutorial page."""
+    st.title("Tutorials")
+    st.markdown(
+        """
+        ## Getting Started
+        Learn how to effectively use this Assistant with these tutorials:
+
+        ### Basic Queries
+        1. Ask simple questions
+        2. Request specific information
+        3. Explore complex topics
+
+        ### Advanced Features
+        1. Working with tools
+        2. Multi-step conversations
+        3. Problem-solving assistance
+        """
+    )
+
+
+def _show_about_page():
+    """Show the about page."""
+    st.title("About Us")
+    st.markdown(
+        """
+        ## About This Assistant
+
+        This assistant is built using powerful AI technology to help users with various tasks.
+
+        ### Technologies Used
+        - OpenAI models
+        - Streamlit framework
+        - Kani conversation framework
+
+        ### Contact
+
+        For questions, feedback, or support:
+        - Email: support@example.com
+        - GitHub: [Project Repository](https://github.com/example/project)
+
+        ### Developers
+        - Development Team
+
+        ### Report Issues
+        If you encounter any problems, please report them on our GitHub repository.
+        """
+    )
+
+
 # Main Streamlit UI
 async def _main():
-
     if "session_id" in st.query_params:
         _render_shared_chat()
         return
-    
+
     else:
         _render_sidebar()
 
-        current_agent = st.session_state.agents[st.session_state.current_agent_name]
+        # Display content based on current page
+        current_page = st.session_state.current_page
 
-        # Enhanced header with styling and customizable formatting
-        header_style = st.session_state.get("header_style", "margin-bottom: 20px;")
-        st.markdown(f"""
-            <h1 style="{header_style}">{current_agent.name}</h1>
-        """, unsafe_allow_html=True)
+        # If the current page is in the pages dictionary and has a render function
+        if current_page in st.session_state.pages and st.session_state.pages[current_page][1] is not None:
+            # Call the render function for the current page
+            page_render_func = st.session_state.pages[current_page][1]
+            page_render_func()
 
-        # Custom chat container styling
-        greeting_container_class = st.session_state.get("greeting_container_class", "hover-section")
-        
-        with st.chat_message("assistant", avatar=current_agent.avatar):
-            # Apply the styling with CSS instead of wrapping with div
-            st.markdown(f"""
-                <style>
-                .stMarkdown {{
-                    /* Inherit styles from hover-section class */
-                    transition: transform 0.3s ease, box-shadow 0.3s ease;
-                    padding: 1rem;
-                    border-radius: 4px;
-                }}
-                .stMarkdown:hover {{
-                    transform: translateY(-15px) scale(1.02);
-                    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
-                }}
-                </style>
-            """, unsafe_allow_html=True)
-            # Write the greeting directly without HTML wrapping
-            st.write(current_agent.greeting)
+        # Special case for chat page which has more complex rendering
+        elif current_page == "chat":
+            # Make sure agents are initialized before trying to render chat UI
+            if "agents" in st.session_state and "current_agent_name" in st.session_state:
+                if st.session_state.current_agent_name in st.session_state.agents:
+                    # Original chat UI
+                    current_agent = st.session_state.agents[st.session_state.current_agent_name]
 
-        for message in current_agent.display_messages:
-            _render_message(message)
+                    # Enhanced header with styling and customizable formatting
+                    header_style = st.session_state.get("header_style", "margin-bottom: 20px;")
+                    st.markdown(f"""
+                        <h1 style="{header_style}">{current_agent.name}</h1>
+                    """, unsafe_allow_html=True)
 
-        await _handle_chat_input()
+                    # Custom chat container styling
+                    greeting_container_class = st.session_state.get("greeting_container_class", "hover-section")
+
+                    with st.chat_message("assistant", avatar=current_agent.avatar):
+                        # Apply the styling with CSS instead of wrapping with div
+                        st.markdown(f"""
+                            <style>
+                            .stMarkdown {{
+                                /* Inherit styles from hover-section class */
+                                transition: transform 0.3s ease, box-shadow 0.3s ease;
+                                padding: 1rem;
+                                border-radius: 4px;
+                            }}
+                            .stMarkdown:hover {{
+                                transform: translateY(-15px) scale(1.02);
+                                box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+                            }}
+                            </style>
+                        """, unsafe_allow_html=True)
+                        # Write the greeting directly without HTML wrapping
+                        st.write(current_agent.greeting)
+
+                    for message in current_agent.display_messages:
+                        _render_message(message)
+
+                    await _handle_chat_input()
+                else:
+                    # Handle case where current_agent_name exists but doesn't match any agent
+                    st.warning("The selected agent is not available. Please choose another agent.")
+            else:
+                # Handle case where agents aren't initialized yet
+                st.info("No agents have been configured. Please configure agents to use the chat functionality.")
+        else:
+            # If we get here, the page doesn't exist or has no render function
+            st.error(f"Page '{current_page}' not found or has no render function.")
 
 
 
