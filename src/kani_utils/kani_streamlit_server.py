@@ -217,11 +217,12 @@ def _lock_ui():
 
 
 def _clear_chat_current_agent():
-    current_agent_name = st.session_state.current_agent_name
-    agents_dict = st.session_state.agents_func()
-    st.session_state.agents[current_agent_name] = agents_dict[current_agent_name]
-
-    st.session_state.current_agent = agents_dict[current_agent_name]
+    current_agent = st.session_state.agents[st.session_state.current_agent_name]
+    current_agent.display_messages = []
+    current_agent.delayed_display_messages = []
+    current_agent.tokens_used_prompt = 0
+    current_agent.tokens_used_completion = 0
+    current_agent.history = []
 
 
 def _render_sidebar():
