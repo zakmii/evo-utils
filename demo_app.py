@@ -15,7 +15,7 @@ import dotenv # pip install python-dotenv
 from kani.engines.openai import OpenAIEngine
 
 # load app-defined agents
-from demo_agents import AuthorSearchKani, MemoryKani, FileKani, TableKani
+from demo_agents import AuthorSearchKani, MemoryKani, FileKani, TableKani, SystemPromptEditorKani
 
 
 # read API keys .env file (e.g. set OPENAI_API_KEY=.... in .env and gitignore .env)
@@ -60,6 +60,7 @@ def get_agents():
             "Memory Agent": MemoryKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
             "File Agent": FileKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
             "Table Agent": TableKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
+            "Editable System Prompt": SystemPromptEditorKani(engine, prompt_tokens_cost = 0.005, completion_tokens_cost = 0.015),
            }
 
 

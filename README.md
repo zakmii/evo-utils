@@ -257,6 +257,10 @@ Use Streamlit's [publishing functionality](https://docs.streamlit.io/deploy/stre
 
 
 # Changelog
+ - 1.5.0: 
+   - Add features for saving system state on chat share (currently unused)
+   - Add .update_system_prompt() convenience function, and example of system-prompt-editable agent
+   - date saved and displayed for shared chats
  - 1.4.1: Strip whitespace from beginning/end of user prompts.
  - 1.4.0: Optional display of function call status
  - 1.3.1: Slightly better status reporting during function calling
