@@ -222,7 +222,7 @@ def _clear_chat_current_agent():
     current_agent.delayed_display_messages = []
     current_agent.tokens_used_prompt = 0
     current_agent.tokens_used_completion = 0
-    current_agent.history = []
+    current_agent.chat_history = []
 
 
 def _render_sidebar():
