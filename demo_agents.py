@@ -19,7 +19,7 @@ class AuthorSearchKani(StreamlitKani):
     # Be sure to override the __init__ method to pass any parameters to the superclass
     def __init__(self, *args, **kwargs):
         # if you have a system prompt, add it to the kwargs before calling super()
-        kwargs["system_prompt"] = "You are a chatbot assistant that can help users find the author of a book. Always use the search_author function to find the author of a book."
+        kwargs["system_prompt"] = "You are a book author search assistant."
 
         super().__init__(*args, **kwargs)
 
@@ -288,3 +288,46 @@ class TableKani(FileKani):
             return result.to_string(index=False)
         except Exception as e:
             return f"Error: {e}"
+
+
+class SystemPromptEditorKani(StreamlitKani):
+    """A Kani that can edit its system prompt."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.name = "System Prompt Editor"
+        self.greeting = "Hello, I'm a demo assistant. You can edit my system prompt."
+        self.description = "An agent that can edit its system prompt."
+
+        ## self.update_system_prompt() is an enhancement provided by kani_utils
+        ## (do not set self.system_prompt directly)
+        self.update_system_prompt("You are a chatbot assistant. Answer the following questions like a pirate.")
+
+    def render_sidebar(self):
+        # Call the superclass method to render the default sidebar elements
+        super().render_sidebar()
+        
+        # render a divider and a button that references a function to call
+        st.divider()
+        st.button("Edit System Prompt", on_click=self.edit_system_prompt)
+
+
+    ## called on button click
+    def edit_system_prompt(self):
+
+        # this is streamlit, see the documentation for @st.dialog()
+        # calling this function renders a modal dialog, with the contents
+        # of the function definding the contents of the modal
+        @st.dialog(title = "Edit System Prompt")
+        def edit_system_prompt():
+            """Edit the system prompt."""
+            new_prompt = st.text_area("System Prompt", value=self.system_prompt, height=200)
+            if st.button("Save"):
+                self.update_system_prompt(new_prompt)
+
+                ## If we set it in the session state, it will be saved when a chat is shared
+                ## and reloaded during rendering (though, at this time this doesn't really do anything)
+                st.session_state['system_prompt'] = new_prompt
+                st.success("System prompt updated.")
+
+        edit_system_prompt()
