@@ -307,9 +307,10 @@ class SystemPromptEditorKani(StreamlitKani):
         # Call the superclass method to render the default sidebar elements
         super().render_sidebar()
         
-        # render a divider and a button that references a function to call
+        # render a divider
         st.divider()
-        st.button("Edit System Prompt", on_click=self.edit_system_prompt)
+        # and a button to call the modal dialog. Use st.session_state.lock_widgets to disable the button during generation
+        st.button("Edit System Prompt", on_click=self.edit_system_prompt, disabled=st.session_state.lock_widgets)
 
 
     ## called on button click
