@@ -19,7 +19,7 @@ class AuthorSearchKani(StreamlitKani):
     # Be sure to override the __init__ method to pass any parameters to the superclass
     def __init__(self, *args, **kwargs):
         # if you have a system prompt, add it to the kwargs before calling super()
-        kwargs["system_prompt"] = "You are a book author search assistant."
+        kwargs["system_prompt"] = "You are a chatbot assistant that can help users find the author of a book. Always use the search_author function to find the author of a book."
 
         super().__init__(*args, **kwargs)
 
