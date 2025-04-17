@@ -21,7 +21,7 @@ kani = {extras = ["openai"], version = "^1.0.2"}
 nest-asyncio = "^1.6.0"
 requests = "^2.32.3"
 upstash-redis = "^1.2.0"
-dill = "^0.3.9"
+dill = ">=0.3.0,<0.3.9"
 redis = "^5.2.1"
 
 [tool.poetry.group.dev.dependencies]
