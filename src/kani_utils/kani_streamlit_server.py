@@ -9,7 +9,7 @@ import hashlib
 import urllib.parse
 from kani_utils.utils import _seconds_to_days_hours, _sync_generator_from_kani_streammanager
 import json
-import random
+import datetime
 
 class UIOnlyMessage:
     def __init__(self, func, role=ChatRole.ASSISTANT, icon="💡", type = "ui_element"):
@@ -368,11 +368,12 @@ def _lock_ui():
 
 
 def _clear_chat_current_agent():
-    current_agent_name = st.session_state.current_agent_name
-    agents_dict = st.session_state.agents_func()
-    st.session_state.agents[current_agent_name] = agents_dict[current_agent_name]
-
-    st.session_state.current_agent = agents_dict[current_agent_name]
+    current_agent = st.session_state.agents[st.session_state.current_agent_name]
+    current_agent.display_messages = []
+    current_agent.delayed_display_messages = []
+    current_agent.tokens_used_prompt = 0
+    current_agent.tokens_used_completion = 0
+    current_agent.chat_history = []
 
 
 def _render_sidebar():
@@ -514,11 +515,15 @@ def _share_chat():
     try:
         current_agent = st.session_state.agents[st.session_state.current_agent_name]
 
+        session_state_bytes_rep = dill.dumps(st.session_state)
+        session_state_str_rep = base64.b64encode(session_state_bytes_rep).decode('utf-8')
+
         ## encode the chat data
         chat_data_dict = {"display_messages": current_agent.display_messages,
                    "agent_greeting": current_agent.greeting,
                    "agent_system_prompt": current_agent.system_prompt,
                    "agent_avatar": current_agent.avatar,
+                   "session_state": session_state_str_rep,
                    }
 
         chat_data_bytes_rep = dill.dumps(chat_data_dict)
@@ -546,6 +551,7 @@ def _share_chat():
         # computed metadata
         agent_model = current_agent.engine.model if current_agent.engine.model else "Unknown"
         convo_cost = current_agent.get_convo_cost()
+        current_date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # chat_data stores the agents display_messages, greeting, system_prompt
         save_dict = {"summary": agent_based_summary,
@@ -555,6 +561,7 @@ def _share_chat():
                      "agent_description": current_agent.description,
                      "access_count": access_count,
                      "chat_data": chat_data_str_rep,
+                     "chat_date": current_date_str,
                      }
 
         # save the chat with a new TTL
@@ -607,6 +614,11 @@ def _render_shared_chat():
         agent_greeting = chat_data["agent_greeting"]
         agent_avatar = chat_data["agent_avatar"]
 
+        # load session state
+        st_session_state_str_rep = chat_data["session_state"]
+        st_session_state_bytes_rep = base64.b64decode(st_session_state_str_rep.encode('utf-8'))
+        st.session_state = dill.loads(st_session_state_bytes_rep)
+
         # load other metadata
         agent_name = session_dict["agent_name"]
         agent_description = session_dict["agent_description"]
@@ -625,17 +637,18 @@ def _render_shared_chat():
         # display session details in expander
         with st.expander("Details"):
             st.markdown(f"##### This chat record will expire in {ttl_human}. Revisiting this URL will reset the expiration timer.")
-            st.markdown(f"You can chat with this and other agents [here](/), selecting *{agent_name}* in the sidebar.")
+            st.markdown(f"You can chat with this agent [here](/), selecting *{agent_name}* in the sidebar.")
             # render checkbox for showing function calls
             st.checkbox("🛠️ Show full message contexts",
                         key="show_function_calls",
                         value = False)
+            st.markdown("**Chat date:** " + str(chat_date))
             st.markdown("**Chat summary:** " + str(agent_summary))
             st.markdown("**Chat access count:** " + str(access_count))
             st.markdown(f"**Chat Cost:** ${0.01 + agent_chat_cost:.2f} (includes summary generation)") # rounded up to 1c
             st.markdown("**Agent Description:** " + str(agent_description))
             st.markdown("**Agent Model:** " + str(agent_model))
-            st.markdown("**Agent System Prompt:**")
+            st.markdown("**Agent System Prompt (*at time of chat share*):**")
             st.code(str(agent_system_prompt), language=None, wrap_lines=True, line_numbers=True)
 
 

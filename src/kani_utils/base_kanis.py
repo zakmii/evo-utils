@@ -1,5 +1,5 @@
 
-from kani import Kani
+from kani import Kani, ChatMessage
 from kani_utils.kani_streamlit_server import UIOnlyMessage
 import streamlit as st
 
@@ -28,6 +28,10 @@ class EnhancedKani(Kani):
         self.tokens_used_prompt = 0
         self.tokens_used_completion = 0
 
+    def update_system_prompt(self, system_prompt):
+        """Update the system prompt of the agent."""
+        self.system_prompt = system_prompt
+        self.always_included_messages = [ChatMessage(role="system", content=system_prompt)]
             
     def get_convo_cost(self):
         """Get the total cost of the conversation so far."""
