@@ -90,8 +90,9 @@ def set_custom_pages(pages_dict):
     st.session_state.custom_pages = pages_dict
 
 
-def serve_app(authenticator=None):
-    if 'authentication_status' not in st.session_state or not st.session_state['authentication_status']:
+def serve_app():  # Remove authenticator parameter
+    # Check for the new 'logged_in' state variable
+    if 'logged_in' not in st.session_state or not st.session_state['logged_in']:
         st.warning("Please log in to access the application.")
         return
 
@@ -99,7 +100,7 @@ def serve_app(authenticator=None):
     assert "agents" in st.session_state, "No agents have been set. Use set_app_agents() to set agents prior to serve_app()"
     loop = st.session_state.get("event_loop")
 
-    loop.run_until_complete(_main(authenticator))
+    loop.run_until_complete(_main())
 
 
 def _apply_visual_styling():
@@ -404,9 +405,9 @@ def _clear_chat_current_agent():
     current_agent.chat_history = []
 
 
-def _render_sidebar(authenticator=None):
-    """Render the sidebar with dynamic pages and authentication controls."""
-    if 'authentication_status' not in st.session_state or not st.session_state['authentication_status']:
+def _render_sidebar():  # Remove authenticator parameter
+    """Render the sidebar with dynamic pages."""
+    if 'logged_in' not in st.session_state or not st.session_state['logged_in']:
         return
 
     current_agent = None
@@ -442,9 +443,7 @@ def _render_sidebar(authenticator=None):
                 """, unsafe_allow_html=True)
 
         st.markdown("---")
-        st.markdown(f"👤 Welcome **{st.session_state.get('name', 'N/A')}**")
-        if authenticator:
-            authenticator.logout('Logout', 'main', key='auth_logout_button')
+        st.markdown(f"👤 Welcome **{st.session_state.get('username', 'N/A')}**")
         st.markdown("---")
 
         if st.session_state.get("sidebar_content"):
@@ -760,8 +759,9 @@ def _show_about_page():
     )
 
 
-async def _main(authenticator=None):
-    if 'authentication_status' not in st.session_state or not st.session_state['authentication_status']:
+async def _main():  # Remove authenticator parameter
+    # Check for the new 'logged_in' state variable
+    if 'logged_in' not in st.session_state or not st.session_state['logged_in']:
         st.error("Access denied. Please log in.")
         return
 
@@ -770,7 +770,7 @@ async def _main(authenticator=None):
         return
 
     else:
-        _render_sidebar(authenticator)
+        _render_sidebar()  # Remove authenticator argument
 
         current_page = st.session_state.current_page
 
@@ -791,7 +791,7 @@ async def _main(authenticator=None):
                     # Display the greeting message directly using st.markdown
                     with st.chat_message("assistant", avatar=current_agent.avatar):
                         # Render the greeting text directly. Streamlit's chat_message handles the container.
-                        st.markdown(current_agent.greeting, unsafe_allow_html=True) # Keep unsafe_allow_html if greeting contains markdown/HTML
+                        st.markdown(current_agent.greeting, unsafe_allow_html=True)  # Keep unsafe_allow_html if greeting contains markdown/HTML
 
                     for message in current_agent.display_messages:
                         _render_message(message)
