@@ -334,6 +334,50 @@ def _render_message(message):
 async def _process_input(prompt):
     prompt = prompt.strip()
 
+    # Query limit check
+    if "query_limits" in st.session_state and \
+       "last_query_reset" in st.session_state and \
+       "user_token" in st.session_state and \
+       "update_user_query_limits_func" in st.session_state:
+
+        now = datetime.datetime.utcnow()
+        try:
+            last_reset_dt = datetime.datetime.fromisoformat(st.session_state["last_query_reset"])
+        except ValueError:
+            # Handle cases where last_query_reset might not be a valid ISO format string initially
+            # For instance, if it was not set correctly or is None. Default to an old date to trigger reset.
+            last_reset_dt = now - datetime.timedelta(hours=2) # Force reset if format is wrong
+            st.session_state["last_query_reset"] = (now - datetime.timedelta(hours=2)).isoformat() # Correct it in session state
+
+
+        if now - last_reset_dt > datetime.timedelta(hours=1):
+            st.session_state["query_limits"] = 10
+            st.session_state["last_query_reset"] = now.isoformat()
+
+            update_func = st.session_state.update_user_query_limits_func
+            token = st.session_state.get("user_token")
+            if token and update_func:
+                update_success, _ = update_func(
+                    token,
+                    st.session_state["query_limits"],
+                    st.session_state["last_query_reset"]
+                )
+                if not update_success:
+                    st.warning("Failed to sync query limit reset with the server.")
+            elif not token:
+                st.warning("User token not found, cannot sync query limit reset.")
+            elif not update_func:
+                st.warning("Update function not found, cannot sync query limit reset.")
+
+
+        if st.session_state["query_limits"] <= 0:
+            st.error("🚫 You have reached your query limit. Please upgrade your account or wait for the hourly reset.")
+            st.toast("⚠️ Query limit reached. Please wait for the hourly reset or upgrade.", icon="⏳")
+            # Ensure UI is not locked if we return early
+            st.session_state.lock_widgets = False
+            #st.rerun() # Rerun to reflect the locked state and error message
+            return
+
     agent = st.session_state.agents[st.session_state.current_agent_name]
 
     user_message = ChatMessage.user(prompt)
@@ -373,6 +417,30 @@ async def _process_input(prompt):
 
     agent.display_messages.append(messages[-1])
     agent.render_delayed_messages()
+
+    # Decrement query limit after successful processing
+    if "query_limits" in st.session_state and \
+       "user_token" in st.session_state and \
+       "update_user_query_limits_func" in st.session_state:
+        st.session_state["query_limits"] -= 1
+
+        update_func = st.session_state.update_user_query_limits_func
+        token = st.session_state.get("user_token")
+        if token and update_func:
+            update_success, _ = update_func(
+                token,
+                st.session_state["query_limits"],
+                st.session_state["last_query_reset"] # This is the existing reset time, not now
+            )
+            if not update_success:
+                st.warning("Failed to sync query limit update with the server.")
+        elif not token:
+            st.warning("User token not found, cannot sync query limit update.")
+        elif not update_func:
+            st.warning("Update function not found, cannot sync query limit update.")
+    elif "query_limits" in st.session_state : # if other conditions for update not met, still decrement locally
+        st.session_state["query_limits"] -=1
+
 
     def render_messages():
         with st.expander("Full context"):
@@ -459,6 +527,7 @@ def _render_sidebar():  # Remove authenticator parameter
                     page_name, _, icon = page_info[0], page_info[1], None
                 else:
                     page_name, _, icon = page_info[0], None, None
+
             else:
                 page_name, _, icon = str(page_info), None, None
 
@@ -601,7 +670,14 @@ def _render_shared_chat():
     try:
         redis = Redis.from_env()
         session_dict_raw = redis.get(session_id)
-        session_dict = json.loads(session_dict_raw)
+
+        # Ensure session_dict_raw is treated as bytes if it's not None, then decode
+        if session_dict_raw is not None:
+            if isinstance(session_dict_raw, bytes):
+                session_dict_raw = session_dict_raw.decode('utf-8')
+            session_dict = json.loads(session_dict_raw) # Parse JSON string to dict
+        else:
+            session_dict = None # Explicitly set to None if key not found
 
         if session_dict is None:
             raise ValueError(f"Session Key {session_id} not found in database")
@@ -630,6 +706,7 @@ def _render_shared_chat():
         agent_chat_cost = session_dict["agent_chat_cost"]
         agent_model = session_dict["agent_model"]
         agent_summary = session_dict["summary"]
+        chat_date = session_dict.get("chat_date", "N/A") # Correctly get chat_date
 
         if "first_func_calls_off_flag" not in st.session_state:
             st.session_state.show_function_calls = False
