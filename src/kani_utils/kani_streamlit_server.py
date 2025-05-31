@@ -10,6 +10,7 @@ import urllib.parse
 from kani_utils.utils import _seconds_to_days_hours, _sync_generator_from_kani_streammanager
 import json
 import datetime
+import os
 
 class UIOnlyMessage:
     def __init__(self, func, role=ChatRole.ASSISTANT, icon="💡", type = "ui_element"):
@@ -575,12 +576,17 @@ def _render_sidebar():  # Remove authenticator parameter
                 )
 
             dbsize = None
-            try:
-                redis = Redis.from_env()
-                dbsize = redis.dbsize()
-                st.session_state.logger.info(f"Shared chats DB size: {dbsize}")
-            except Exception as e:
-                st.session_state.logger.error(f"Error connecting to database, or no database to connect to: {str(e)}")
+
+            # if UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are both set, we can connect to the Redis databaseAdd commentMore actions
+            # otherwise, we assume no database is configured
+            if "UPSTASH_REDIS_REST_URL" in os.environ and "UPSTASH_REDIS_REST_TOKEN" in os.environ:
+                try:
+                    redis = Redis.from_env()
+                    dbsize = redis.dbsize()
+                    st.session_state.logger.info(f"Shared chats DB size: {dbsize}")
+
+                except Exception as e:
+                    st.session_state.logger.error(f"Error connecting to database, or no database to connect to. Error:\n{e}")
 
             if dbsize is not None:
                 with col2:
